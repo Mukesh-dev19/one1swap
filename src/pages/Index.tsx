@@ -1,16 +1,166 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
+import { ArrowRight, BookOpen, Recycle, Users, Zap, Shield, MessageSquare } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import logo from "@/assets/logo.jpeg";
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+const fadeUp = {
+  hidden: { opacity: 0, y: 30 },
+  visible: (i: number) => ({ opacity: 1, y: 0, transition: { delay: i * 0.1, duration: 0.5 } }),
+};
+
+const categories = [
+  { icon: BookOpen, label: "Books", count: "250+" },
+  { icon: Zap, label: "Electronics", count: "180+" },
+  { icon: Users, label: "Study Groups", count: "90+" },
+  { icon: Recycle, label: "Exchange", count: "320+" },
+];
+
+const features = [
+  { icon: Shield, title: "Secure Trades", desc: "Verified college students only. Safe exchanges on campus." },
+  { icon: MessageSquare, title: "Real-time Chat", desc: "Message sellers instantly. Negotiate and arrange meetups." },
+  { icon: Recycle, title: "Sustainability", desc: "Reduce waste by sharing resources. Track your impact." },
+  { icon: Zap, title: "Quick Upload", desc: "List your items in seconds with our simple upload form." },
+];
+
+const steps = [
+  { num: "01", title: "Create Account", desc: "Sign up with your college email in seconds." },
+  { num: "02", title: "List or Browse", desc: "Upload resources or explore what others are sharing." },
+  { num: "03", title: "Connect & Exchange", desc: "Chat with peers and complete your exchange." },
+];
+
+const Index = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
+    <div className="min-h-screen">
+      {/* Hero */}
+      <section className="relative pt-32 pb-20 px-4 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-glow opacity-30" />
+        <div className="container mx-auto text-center relative z-10">
+          <motion.div initial="hidden" animate="visible" variants={fadeUp} custom={0}>
+            <img src={logo} alt="OneSwap" className="h-24 w-24 rounded-2xl object-cover mx-auto mb-6 shadow-glow animate-float" />
+          </motion.div>
+          <motion.h1
+            className="font-heading text-4xl sm:text-6xl lg:text-7xl font-bold mb-6"
+            initial="hidden" animate="visible" variants={fadeUp} custom={1}
+          >
+            Share Smarter,{" "}
+            <span className="text-gradient">Save Together</span>
+          </motion.h1>
+          <motion.p
+            className="text-muted-foreground text-lg sm:text-xl max-w-2xl mx-auto mb-8"
+            initial="hidden" animate="visible" variants={fadeUp} custom={2}
+          >
+            The sustainable marketplace for college students to buy, sell, exchange, and share academic resources.
+          </motion.p>
+          <motion.div className="flex flex-wrap gap-3 justify-center" initial="hidden" animate="visible" variants={fadeUp} custom={3}>
+            <Link to="/marketplace">
+              <Button size="lg" className="bg-gradient-primary font-semibold gap-2 text-base px-8">
+                Browse Resources <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <Link to="/upload">
+              <Button size="lg" variant="outline" className="font-semibold text-base px-8">
+                Start Sharing
+              </Button>
+            </Link>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Categories */}
+      <section className="py-16 px-4">
+        <div className="container mx-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {categories.map((cat, i) => (
+              <motion.div
+                key={cat.label}
+                className="glass rounded-xl p-6 text-center hover:shadow-glow transition-all cursor-pointer group"
+                initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={i}
+              >
+                <cat.icon className="h-8 w-8 mx-auto mb-3 text-primary group-hover:scale-110 transition-transform" />
+                <h3 className="font-heading font-semibold">{cat.label}</h3>
+                <p className="text-sm text-muted-foreground">{cat.count} items</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="py-16 px-4">
+        <div className="container mx-auto">
+          <motion.h2
+            className="font-heading text-3xl sm:text-4xl font-bold text-center mb-12"
+            initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={0}
+          >
+            Why <span className="text-gradient">OneSwap</span>?
+          </motion.h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {features.map((f, i) => (
+              <motion.div
+                key={f.title}
+                className="glass rounded-xl p-6 hover:shadow-glow transition-all"
+                initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={i}
+              >
+                <div className="h-12 w-12 rounded-lg bg-gradient-primary flex items-center justify-center mb-4">
+                  <f.icon className="h-6 w-6 text-primary-foreground" />
+                </div>
+                <h3 className="font-heading font-semibold mb-2">{f.title}</h3>
+                <p className="text-sm text-muted-foreground">{f.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="py-16 px-4">
+        <div className="container mx-auto">
+          <motion.h2
+            className="font-heading text-3xl sm:text-4xl font-bold text-center mb-12"
+            initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={0}
+          >
+            How It <span className="text-gradient">Works</span>
+          </motion.h2>
+          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+            {steps.map((s, i) => (
+              <motion.div
+                key={s.num}
+                className="text-center"
+                initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={i}
+              >
+                <span className="font-heading text-5xl font-bold text-gradient opacity-60">{s.num}</span>
+                <h3 className="font-heading text-xl font-semibold mt-2 mb-2">{s.title}</h3>
+                <p className="text-sm text-muted-foreground">{s.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="py-20 px-4">
+        <div className="container mx-auto">
+          <motion.div
+            className="glass rounded-2xl p-8 sm:p-12 text-center shadow-glow"
+            initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={0}
+          >
+            <h2 className="font-heading text-3xl sm:text-4xl font-bold mb-4">
+              Ready to <span className="text-gradient">swap smarter</span>?
+            </h2>
+            <p className="text-muted-foreground mb-6 max-w-lg mx-auto">
+              Join thousands of college students already saving money and reducing waste.
+            </p>
+            <Link to="/register">
+              <Button size="lg" className="bg-gradient-primary font-semibold gap-2 px-10">
+                Join OneSwap <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+          </motion.div>
+        </div>
+      </section>
     </div>
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
