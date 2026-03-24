@@ -217,7 +217,7 @@ const Messages = () => {
                   <div className="h-8 w-8 rounded-full bg-gradient-primary flex items-center justify-center">
                     <User className="h-4 w-4 text-white" />
                   </div>
-                  <Circle className="absolute -bottom-0.5 -right-0.5 h-3 w-3 text-green-500 fill-green-500" />
+                  <Circle className="absolute -bottom-0.5 -right-0.5 h-3 w-3 text-primary fill-primary" />
                 </div>
                 <div>
                   <p className="font-semibold text-sm">{activeName}</p>
