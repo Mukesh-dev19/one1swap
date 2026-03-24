@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, MapPin, MessageSquare, User, Clock, Send, Heart } from "lucide-react";
+import { ArrowLeft, MapPin, MessageSquare, User, Clock, Send, Heart, Trash2, Check, FileText, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -18,9 +18,11 @@ interface Resource {
   condition: string | null;
   location: string | null;
   images: string[];
+  files: string[] | null;
   description: string | null;
   user_id: string;
   created_at: string;
+  status: string | null;
 }
 
 interface ResourceRequest {
@@ -35,6 +37,7 @@ interface ResourceRequest {
 const ResourceDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [resource, setResource] = useState<Resource | null>(null);
   const [requests, setRequests] = useState<ResourceRequest[]>([]);
   const [requestMsg, setRequestMsg] = useState("");
@@ -45,14 +48,15 @@ const ResourceDetail = () => {
     if (id) {
       fetchResource();
       fetchRequests();
-      subscribeToRequests();
+      const cleanup = subscribeToRequests();
+      return cleanup;
     }
   }, [id]);
 
   const fetchResource = async () => {
     const { data } = await supabase.from("resources").select("*").eq("id", id).single();
     if (data) {
-      setResource(data as Resource);
+      setResource(data as unknown as Resource);
       const { data: profile } = await supabase.from("profiles").select("full_name").eq("user_id", data.user_id).single();
       if (profile) setSellerName(profile.full_name || "Anonymous");
     }
@@ -66,7 +70,6 @@ const ResourceDetail = () => {
       .eq("resource_id", id)
       .order("created_at", { ascending: true });
     if (data) {
-      // Fetch profiles for each request
       const enriched = await Promise.all(
         data.map(async (req) => {
           const { data: profile } = await supabase.from("profiles").select("full_name").eq("user_id", req.user_id).single();
@@ -80,10 +83,15 @@ const ResourceDetail = () => {
   const subscribeToRequests = () => {
     const channel = supabase
       .channel("resource-requests-" + id)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "resource_requests", filter: `resource_id=eq.${id}` }, async (payload) => {
-        const newReq = payload.new as any;
-        const { data: profile } = await supabase.from("profiles").select("full_name").eq("user_id", newReq.user_id).single();
-        setRequests((prev) => [...prev, { ...newReq, profiles: profile }]);
+      .on("postgres_changes", { event: "*", schema: "public", table: "resource_requests", filter: `resource_id=eq.${id}` }, async (payload) => {
+        if (payload.eventType === "INSERT") {
+          const newReq = payload.new as any;
+          const { data: profile } = await supabase.from("profiles").select("full_name").eq("user_id", newReq.user_id).single();
+          setRequests((prev) => [...prev, { ...newReq, profiles: profile }]);
+        } else if (payload.eventType === "UPDATE") {
+          const updated = payload.new as any;
+          setRequests((prev) => prev.map((r) => r.id === updated.id ? { ...r, status: updated.status } : r));
+        }
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -104,17 +112,63 @@ const ResourceDetail = () => {
     }
   };
 
+  const handleAcceptRequest = async (requestId: string) => {
+    const { error } = await supabase.from("resource_requests").update({ status: "accepted" }).eq("id", requestId);
+    if (!error) {
+      // Mark resource as sold - it will be auto-removed
+      await supabase.from("resources").update({ status: "sold" }).eq("id", id);
+      toast({ title: "Request accepted! ✅", description: "The resource will be removed from marketplace in a few days." });
+    }
+  };
+
+  const handleDeleteResource = async () => {
+    if (!resource || !user || resource.user_id !== user.id) return;
+    const { error } = await supabase.from("resources").delete().eq("id", resource.id);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Resource deleted", description: "Your listing has been removed." });
+      navigate("/marketplace");
+    }
+  };
+
+  const handleMessageSeller = async () => {
+    if (!user || !resource) return;
+    // Send initial message to seller
+    await supabase.from("messages").insert({
+      sender_id: user.id,
+      receiver_id: resource.user_id,
+      content: `Hi! I'm interested in your listing: "${resource.title}"`,
+    });
+    navigate("/messages");
+  };
+
+  const isOwner = user?.id === resource?.user_id;
+
   if (loading) return <div className="min-h-screen pt-20 flex items-center justify-center"><div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" /></div>;
   if (!resource) return <div className="min-h-screen pt-20 text-center text-muted-foreground">Resource not found.</div>;
 
   return (
     <div className="min-h-screen pt-16 px-4 pb-8">
       <div className="container mx-auto max-w-4xl pt-4">
-        <Link to="/marketplace">
-          <Button variant="ghost" size="sm" className="mb-4 gap-1 rounded-full">
-            <ArrowLeft className="h-4 w-4" /> Back
-          </Button>
-        </Link>
+        <div className="flex items-center justify-between mb-4">
+          <Link to="/marketplace">
+            <Button variant="ghost" size="sm" className="gap-1 rounded-full">
+              <ArrowLeft className="h-4 w-4" /> Back
+            </Button>
+          </Link>
+          {isOwner && (
+            <Button variant="destructive" size="sm" className="gap-1 rounded-full" onClick={handleDeleteResource}>
+              <Trash2 className="h-4 w-4" /> Delete Listing
+            </Button>
+          )}
+        </div>
+
+        {resource.status === "sold" && (
+          <div className="bg-primary/10 border border-primary/30 rounded-2xl p-4 mb-6 text-center">
+            <p className="text-primary font-semibold">✅ This resource has been sold/exchanged and will be removed soon.</p>
+          </div>
+        )}
 
         <div className="grid md:grid-cols-2 gap-8">
           <motion.div
@@ -133,6 +187,7 @@ const ResourceDetail = () => {
               <Badge className="bg-gradient-primary text-white border-0">{resource.type}</Badge>
               <Badge variant="outline">{resource.category}</Badge>
               {resource.condition && <Badge variant="outline">{resource.condition}</Badge>}
+              {resource.status === "sold" && <Badge variant="destructive">Sold</Badge>}
             </div>
             <h1 className="font-heading text-2xl sm:text-3xl font-bold">{resource.title}</h1>
             <p className="text-3xl font-heading font-bold text-primary">
@@ -146,6 +201,24 @@ const ResourceDetail = () => {
               </div>
             )}
 
+            {/* Attached files */}
+            {resource.files && resource.files.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-semibold">📎 Attached Files</p>
+                {resource.files.map((fileUrl, i) => {
+                  const fileName = fileUrl.split("/").pop() || `File ${i + 1}`;
+                  return (
+                    <a key={i} href={fileUrl} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2 bg-muted/50 rounded-xl px-4 py-2 hover:bg-muted transition-colors">
+                      <FileText className="h-4 w-4 text-primary" />
+                      <span className="text-sm truncate flex-1">{fileName}</span>
+                      <Download className="h-4 w-4 text-muted-foreground" />
+                    </a>
+                  );
+                })}
+              </div>
+            )}
+
             <div className="bg-muted/50 rounded-2xl p-4 flex items-center gap-3">
               <div className="h-10 w-10 rounded-full bg-gradient-primary flex items-center justify-center">
                 <User className="h-5 w-5 text-white" />
@@ -154,49 +227,54 @@ const ResourceDetail = () => {
                 <p className="font-semibold text-sm">{sellerName}</p>
                 <p className="text-xs text-muted-foreground">Seller</p>
               </div>
-              <Link to="/messages">
-                <Button size="sm" variant="outline" className="gap-1 rounded-full">
+              {!isOwner && (
+                <Button size="sm" variant="outline" className="gap-1 rounded-full" onClick={handleMessageSeller}>
                   <MessageSquare className="h-3 w-3" /> Chat
                 </Button>
-              </Link>
+              )}
             </div>
 
-            <div className="flex gap-2">
-              <Button size="lg" className="flex-1 bg-gradient-primary font-semibold gap-2 text-white rounded-xl">
-                <MessageSquare className="h-4 w-4" /> Request
-              </Button>
-              <Button size="lg" variant="outline" className="rounded-xl">
-                <Heart className="h-4 w-4" />
-              </Button>
-            </div>
+            {!isOwner && resource.status !== "sold" && (
+              <div className="flex gap-2">
+                <Button size="lg" className="flex-1 bg-gradient-primary font-semibold gap-2 text-white rounded-xl" onClick={() => document.getElementById("request-input")?.focus()}>
+                  <MessageSquare className="h-4 w-4" /> Request
+                </Button>
+                <Button size="lg" variant="outline" className="rounded-xl">
+                  <Heart className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </motion.div>
         </div>
 
-        {/* Requests */}
+        {/* Requests Queue */}
         <motion.div className="mt-12" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
           <h2 className="font-heading text-xl font-bold mb-4 flex items-center gap-2">
             <Clock className="h-5 w-5 text-primary" />
             Requests <span className="text-muted-foreground text-sm font-normal">(First come, first served)</span>
           </h2>
 
-          <div className="flex gap-2 mb-6">
-            <Input
-              placeholder="Send a request to the owner..."
-              value={requestMsg}
-              onChange={(e) => setRequestMsg(e.target.value)}
-              className="rounded-full"
-              onKeyDown={(e) => e.key === "Enter" && handleSendRequest()}
-            />
-            <Button onClick={handleSendRequest} className="bg-gradient-primary gap-1 text-white rounded-full">
-              <Send className="h-4 w-4" /> Send
-            </Button>
-          </div>
+          {!isOwner && resource.status !== "sold" && (
+            <div className="flex gap-2 mb-6">
+              <Input
+                id="request-input"
+                placeholder="Send a request to the owner..."
+                value={requestMsg}
+                onChange={(e) => setRequestMsg(e.target.value)}
+                className="rounded-full"
+                onKeyDown={(e) => e.key === "Enter" && handleSendRequest()}
+              />
+              <Button onClick={handleSendRequest} className="bg-gradient-primary gap-1 text-white rounded-full">
+                <Send className="h-4 w-4" /> Send
+              </Button>
+            </div>
+          )}
 
           <div className="space-y-3">
             {requests.map((req, i) => (
               <motion.div
                 key={req.id}
-                className="bg-card rounded-2xl p-4 flex items-start gap-3 shadow-soft border border-border/50"
+                className={`bg-card rounded-2xl p-4 flex items-start gap-3 shadow-soft border ${req.status === "accepted" ? "border-primary/50 bg-primary/5" : "border-border/50"}`}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
@@ -205,15 +283,21 @@ const ResourceDetail = () => {
                   <User className="h-4 w-4 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-sm">{req.profiles?.full_name || "Anonymous"}</span>
                     <Badge variant="outline" className="text-xs">#{i + 1}</Badge>
+                    {req.status === "accepted" && <Badge className="bg-primary text-primary-foreground text-xs">Accepted ✅</Badge>}
                     <span className="text-xs text-muted-foreground ml-auto">
                       {new Date(req.created_at).toLocaleString()}
                     </span>
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">{req.message}</p>
                 </div>
+                {isOwner && req.status !== "accepted" && resource.status !== "sold" && (
+                  <Button size="sm" variant="outline" className="gap-1 rounded-full shrink-0" onClick={() => handleAcceptRequest(req.id)}>
+                    <Check className="h-3 w-3" /> Accept
+                  </Button>
+                )}
               </motion.div>
             ))}
             {requests.length === 0 && (
