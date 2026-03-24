@@ -224,7 +224,7 @@ const Messages = () => {
                   {otherTyping ? (
                     <p className="text-xs text-primary animate-pulse">typing...</p>
                   ) : (
-                    <p className="text-xs text-green-500">online</p>
+                    <p className="text-xs text-primary">online</p>
                   )}
                 </div>
               </div>
