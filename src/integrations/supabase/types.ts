@@ -118,10 +118,12 @@ export type Database = {
           condition: string | null
           created_at: string
           description: string | null
+          files: string[] | null
           id: string
           images: string[] | null
           location: string | null
           price: number | null
+          status: string | null
           title: string
           type: string
           updated_at: string
@@ -132,10 +134,12 @@ export type Database = {
           condition?: string | null
           created_at?: string
           description?: string | null
+          files?: string[] | null
           id?: string
           images?: string[] | null
           location?: string | null
           price?: number | null
+          status?: string | null
           title: string
           type: string
           updated_at?: string
@@ -146,16 +150,47 @@ export type Database = {
           condition?: string | null
           created_at?: string
           description?: string | null
+          files?: string[] | null
           id?: string
           images?: string[] | null
           location?: string | null
           price?: number | null
+          status?: string | null
           title?: string
           type?: string
           updated_at?: string
           user_id?: string
         }
         Relationships: []
+      }
+      saved_items: {
+        Row: {
+          created_at: string
+          id: string
+          resource_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          resource_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          resource_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_items_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

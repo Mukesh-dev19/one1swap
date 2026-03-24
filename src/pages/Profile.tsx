@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { User, Mail, MapPin, Edit, Package, Save } from "lucide-react";
+import { User, Mail, MapPin, Edit, Package, Save, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -9,11 +9,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 
-interface Profile {
+interface ProfileData {
   full_name: string | null;
   college: string | null;
   campus: string | null;
   bio: string | null;
+  avatar_url: string | null;
 }
 
 interface Resource {
@@ -26,9 +27,10 @@ interface Resource {
 
 const Profile = () => {
   const { user } = useAuth();
-  const [profile, setProfile] = useState<Profile>({ full_name: "", college: "", campus: "", bio: "" });
+  const [profile, setProfile] = useState<ProfileData>({ full_name: "", college: "", campus: "", bio: "", avatar_url: null });
   const [listings, setListings] = useState<Resource[]>([]);
   const [editing, setEditing] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -45,6 +47,21 @@ const Profile = () => {
   const fetchListings = async () => {
     const { data } = await supabase.from("resources").select("*").eq("user_id", user!.id).order("created_at", { ascending: false });
     if (data) setListings(data as Resource[]);
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setUploading(true);
+    const filePath = `${user.id}/avatar-${Date.now()}.${file.name.split(".").pop()}`;
+    const { error: uploadError } = await supabase.storage.from("resource-images").upload(filePath, file);
+    if (!uploadError) {
+      const { data: urlData } = supabase.storage.from("resource-images").getPublicUrl(filePath);
+      await supabase.from("profiles").update({ avatar_url: urlData.publicUrl }).eq("user_id", user.id);
+      setProfile((prev) => ({ ...prev, avatar_url: urlData.publicUrl }));
+      toast({ title: "Photo updated! 📸" });
+    }
+    setUploading(false);
   };
 
   const handleSave = async () => {
@@ -71,8 +88,18 @@ const Profile = () => {
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
         >
           <div className="flex flex-col sm:flex-row items-center gap-6">
-            <div className="h-24 w-24 rounded-full bg-gradient-primary flex items-center justify-center">
-              <User className="h-12 w-12 text-white" />
+            <div className="relative group">
+              {profile.avatar_url ? (
+                <img src={profile.avatar_url} alt="Avatar" className="h-24 w-24 rounded-full object-cover border-4 border-primary/20" />
+              ) : (
+                <div className="h-24 w-24 rounded-full bg-gradient-primary flex items-center justify-center">
+                  <User className="h-12 w-12 text-white" />
+                </div>
+              )}
+              <label className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+                <Camera className="h-6 w-6 text-white" />
+                <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={uploading} />
+              </label>
             </div>
             <div className="flex-1 text-center sm:text-left space-y-2">
               {editing ? (

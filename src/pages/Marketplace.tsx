@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Search, SlidersHorizontal, Grid3X3, List, MapPin, Heart, MessageSquare, Bookmark } from "lucide-react";
+import { Search, SlidersHorizontal, Grid3X3, List, MapPin, Heart, Bookmark, BookmarkCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/hooks/use-toast";
 
 interface Resource {
   id: string;
@@ -20,31 +22,55 @@ interface Resource {
   description: string | null;
   created_at: string;
   user_id: string;
+  status: string | null;
 }
 
-const CATEGORIES = ["All", "Books", "Electronics", "Tools", "Study Materials"];
+const CATEGORIES = ["All", "Books", "Electronics", "Tools", "Study Materials", "Notes & PDFs"];
 const TYPES = ["All", "Sell", "Exchange", "Share"];
 
 const Marketplace = () => {
+  const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [type, setType] = useState("All");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [showFilters, setShowFilters] = useState(false);
   const [resources, setResources] = useState<Resource[]>([]);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchResources();
-  }, []);
+    if (user) fetchSavedIds();
+  }, [user]);
 
   const fetchResources = async () => {
     const { data, error } = await supabase
       .from("resources")
       .select("*")
       .order("created_at", { ascending: false });
-    if (!error && data) setResources(data as Resource[]);
+    if (!error && data) setResources((data as Resource[]).filter((r) => r.status !== "sold"));
     setLoading(false);
+  };
+
+  const fetchSavedIds = async () => {
+    if (!user) return;
+    const { data } = await supabase.from("saved_items").select("resource_id").eq("user_id", user.id);
+    if (data) setSavedIds(new Set(data.map((d) => d.resource_id)));
+  };
+
+  const toggleSave = async (resourceId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    if (savedIds.has(resourceId)) {
+      await supabase.from("saved_items").delete().eq("user_id", user.id).eq("resource_id", resourceId);
+      setSavedIds((prev) => { const n = new Set(prev); n.delete(resourceId); return n; });
+      toast({ title: "Removed from saved" });
+    } else {
+      await supabase.from("saved_items").insert({ user_id: user.id, resource_id: resourceId });
+      setSavedIds((prev) => new Set(prev).add(resourceId));
+      toast({ title: "Saved! 💾" });
+    }
   };
 
   const filtered = resources.filter((item) => {
@@ -64,16 +90,10 @@ const Marketplace = () => {
           Browse <span className="text-gradient">Resources</span>
         </motion.h1>
 
-        {/* Search bar */}
         <div className="flex gap-2 mb-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search books, electronics, tools..."
-              className="pl-10 rounded-full"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+            <Input placeholder="Search books, electronics, tools..." className="pl-10 rounded-full" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <Button variant="outline" size="icon" className="rounded-full" onClick={() => setShowFilters(!showFilters)}>
             <SlidersHorizontal className="h-4 w-4" />
@@ -108,17 +128,9 @@ const Marketplace = () => {
         {loading ? (
           <div className="text-center py-20 text-muted-foreground">Loading resources...</div>
         ) : (
-          <div className={view === "grid"
-            ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
-            : "space-y-3"
-          }>
+          <div className={view === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" : "space-y-3"}>
             {filtered.map((item, i) => (
-              <motion.div
-                key={item.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-              >
+              <motion.div key={item.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
                 <Link to={`/resource/${item.id}`}>
                   {view === "grid" ? (
                     <div className="bg-card rounded-2xl overflow-hidden shadow-soft hover:shadow-glow transition-all group cursor-pointer border border-border/50">
@@ -136,8 +148,8 @@ const Marketplace = () => {
                             <button className="text-muted-foreground hover:text-destructive transition-colors" onClick={(e) => e.preventDefault()}>
                               <Heart className="h-4 w-4" />
                             </button>
-                            <button className="text-muted-foreground hover:text-primary transition-colors" onClick={(e) => e.preventDefault()}>
-                              <Bookmark className="h-4 w-4" />
+                            <button className={`transition-colors ${savedIds.has(item.id) ? "text-primary" : "text-muted-foreground hover:text-primary"}`} onClick={(e) => toggleSave(item.id, e)}>
+                              {savedIds.has(item.id) ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
                             </button>
                           </div>
                         </div>
@@ -170,9 +182,14 @@ const Marketplace = () => {
                         </div>
                         <p className="text-xs text-muted-foreground">{item.category} · {item.condition} · {item.location}</p>
                       </div>
-                      <span className="font-heading font-bold text-primary shrink-0">
-                        {item.price === 0 ? "Free" : `₹${item.price}`}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-heading font-bold text-primary">
+                          {item.price === 0 ? "Free" : `₹${item.price}`}
+                        </span>
+                        <button className={`transition-colors ${savedIds.has(item.id) ? "text-primary" : "text-muted-foreground"}`} onClick={(e) => toggleSave(item.id, e)}>
+                          {savedIds.has(item.id) ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </Link>
