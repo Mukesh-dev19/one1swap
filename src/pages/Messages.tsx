@@ -190,7 +190,7 @@ const Messages = () => {
                     <div className="h-10 w-10 rounded-full bg-gradient-primary flex items-center justify-center shrink-0">
                       <User className="h-5 w-5 text-white" />
                     </div>
-                    <Circle className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 text-green-500 fill-green-500" />
+                    <Circle className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 text-primary fill-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
