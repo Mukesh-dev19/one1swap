@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Send, User, Circle } from "lucide-react";
+import { Send, User, Circle, Paperclip, Image as ImageIcon, FileText, X, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,6 +13,9 @@ interface Message {
   content: string;
   created_at: string;
   read: boolean | null;
+  attachment_url: string | null;
+  attachment_type: string | null;
+  attachment_name: string | null;
 }
 
 interface Conversation {
@@ -21,6 +24,7 @@ interface Conversation {
   lastMessage: string;
   lastTime: string;
   unread: number;
+  avatarUrl: string | null;
 }
 
 const Messages = () => {
@@ -31,9 +35,13 @@ const Messages = () => {
   const [newMsg, setNewMsg] = useState("");
   const [typing, setTyping] = useState(false);
   const [otherTyping, setOtherTyping] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [attachmentPreview, setAttachmentPreview] = useState<{ file: File; previewUrl?: string; type: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeChatRef = useRef<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { activeChatRef.current = activeChat; }, [activeChat]);
 
@@ -54,7 +62,6 @@ const Messages = () => {
         })
         .subscribe();
 
-      // Presence channel for typing/online
       const presenceChannel = supabase.channel("presence-chat", { config: { presence: { key: user.id } } });
       presenceChannel
         .on("presence", { event: "sync" }, () => {})
@@ -104,13 +111,19 @@ const Messages = () => {
 
     const convs: Conversation[] = [];
     for (const [userId, { msgs }] of convMap) {
-      const { data: profile } = await supabase.from("profiles").select("full_name").eq("user_id", userId).single();
+      const { data: profile } = await supabase.from("profiles").select("full_name, avatar_url").eq("user_id", userId).single();
       const unread = msgs.filter((m) => m.receiver_id === user.id && !m.read).length;
+      const lastMsg = msgs[0];
+      let lastText = lastMsg.content;
+      if (lastMsg.attachment_type === "image") lastText = "📷 Photo";
+      else if (lastMsg.attachment_type === "file") lastText = `📎 ${lastMsg.attachment_name || "File"}`;
+
       convs.push({
         userId,
         name: profile?.full_name || "Anonymous",
-        lastMessage: msgs[0].content,
-        lastTime: new Date(msgs[0].created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        avatarUrl: profile?.avatar_url || null,
+        lastMessage: lastText,
+        lastTime: new Date(lastMsg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         unread,
       });
     }
@@ -127,7 +140,6 @@ const Messages = () => {
       .order("created_at", { ascending: true });
     if (data) setMessages(data as Message[]);
 
-    // Mark messages as read
     await supabase.from("messages").update({ read: true }).eq("receiver_id", user.id).eq("sender_id", otherUserId).eq("read", false);
   };
 
@@ -150,17 +162,90 @@ const Messages = () => {
     typingTimeoutRef.current = setTimeout(() => setTyping(false), 1500);
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: "image" | "file") => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const preview: { file: File; previewUrl?: string; type: string } = { file, type };
+    if (type === "image") {
+      const reader = new FileReader();
+      reader.onload = () => {
+        preview.previewUrl = reader.result as string;
+        setAttachmentPreview(preview);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setAttachmentPreview(preview);
+    }
+    e.target.value = "";
+  };
+
+  const clearAttachment = () => setAttachmentPreview(null);
+
   const handleSend = async () => {
-    if (!newMsg.trim() || !user || !activeChat) return;
+    if ((!newMsg.trim() && !attachmentPreview) || !user || !activeChat) return;
+
+    let attachmentUrl: string | null = null;
+    let attachmentType: string | null = null;
+    let attachmentName: string | null = null;
+
+    if (attachmentPreview) {
+      setUploading(true);
+      const file = attachmentPreview.file;
+      const ext = file.name.split(".").pop();
+      const bucket = attachmentPreview.type === "image" ? "resource-images" : "resource-files";
+      const filePath = `chat/${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+      
+      const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file);
+      if (!uploadError) {
+        const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(filePath);
+        attachmentUrl = urlData.publicUrl;
+        attachmentType = attachmentPreview.type;
+        attachmentName = file.name;
+      }
+      setUploading(false);
+    }
+
     await supabase.from("messages").insert({
       sender_id: user.id,
       receiver_id: activeChat,
-      content: newMsg,
+      content: newMsg.trim() || (attachmentType === "image" ? "📷 Photo" : `📎 ${attachmentName}`),
+      attachment_url: attachmentUrl,
+      attachment_type: attachmentType,
+      attachment_name: attachmentName,
     });
     setNewMsg("");
+    setAttachmentPreview(null);
   };
 
   const activeName = conversations.find((c) => c.userId === activeChat)?.name || "";
+  const activeAvatar = conversations.find((c) => c.userId === activeChat)?.avatarUrl;
+
+  const renderMessageContent = (m: Message) => {
+    const isMine = m.sender_id === user?.id;
+    return (
+      <>
+        {m.attachment_type === "image" && m.attachment_url && (
+          <a href={m.attachment_url} target="_blank" rel="noopener noreferrer">
+            <img src={m.attachment_url} alt="Shared" className="rounded-xl max-w-[240px] max-h-[200px] object-cover mb-1" />
+          </a>
+        )}
+        {m.attachment_type === "file" && m.attachment_url && (
+          <a href={m.attachment_url} target="_blank" rel="noopener noreferrer"
+            className={`flex items-center gap-2 rounded-xl px-3 py-2 mb-1 ${isMine ? "bg-white/20" : "bg-muted"}`}>
+            <FileText className="h-4 w-4 shrink-0" />
+            <span className="text-xs truncate max-w-[150px]">{m.attachment_name || "File"}</span>
+            <Download className="h-3 w-3 shrink-0" />
+          </a>
+        )}
+        {m.content && !(m.attachment_type && (m.content === "📷 Photo" || m.content.startsWith("📎"))) && (
+          <p>{m.content}</p>
+        )}
+        <p className={`text-xs mt-1 ${isMine ? "text-white/60" : "text-muted-foreground"}`}>
+          {new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        </p>
+      </>
+    );
+  };
 
   return (
     <div className="min-h-screen pt-16 px-4 pb-8">
@@ -187,9 +272,13 @@ const Messages = () => {
                   onClick={() => setActiveChat(c.userId)}
                 >
                   <div className="relative">
-                    <div className="h-10 w-10 rounded-full bg-gradient-primary flex items-center justify-center shrink-0">
-                      <User className="h-5 w-5 text-white" />
-                    </div>
+                    {c.avatarUrl ? (
+                      <img src={c.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
+                    ) : (
+                      <div className="h-10 w-10 rounded-full bg-gradient-primary flex items-center justify-center shrink-0">
+                        <User className="h-5 w-5 text-white" />
+                      </div>
+                    )}
                     <Circle className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 text-primary fill-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -214,9 +303,13 @@ const Messages = () => {
             {activeChat && (
               <div className="px-4 py-3 border-b border-border/50 flex items-center gap-3">
                 <div className="relative">
-                  <div className="h-8 w-8 rounded-full bg-gradient-primary flex items-center justify-center">
-                    <User className="h-4 w-4 text-white" />
-                  </div>
+                  {activeAvatar ? (
+                    <img src={activeAvatar} alt="" className="h-8 w-8 rounded-full object-cover" />
+                  ) : (
+                    <div className="h-8 w-8 rounded-full bg-gradient-primary flex items-center justify-center">
+                      <User className="h-4 w-4 text-white" />
+                    </div>
+                  )}
                   <Circle className="absolute -bottom-0.5 -right-0.5 h-3 w-3 text-primary fill-primary" />
                 </div>
                 <div>
@@ -238,10 +331,7 @@ const Messages = () => {
                       ? "bg-gradient-primary text-white"
                       : "bg-muted text-foreground"
                   }`}>
-                    <p>{m.content}</p>
-                    <p className={`text-xs mt-1 ${m.sender_id === user?.id ? "text-white/60" : "text-muted-foreground"}`}>
-                      {new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    </p>
+                    {renderMessageContent(m)}
                   </div>
                 </div>
               ))}
@@ -258,18 +348,53 @@ const Messages = () => {
               )}
               <div ref={messagesEndRef} />
             </div>
+
             {activeChat && (
-              <div className="p-4 border-t border-border/50 flex gap-2">
-                <Input
-                  placeholder="Type a message..."
-                  value={newMsg}
-                  onChange={handleInputChange}
-                  onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                  className="rounded-full"
-                />
-                <Button onClick={handleSend} className="bg-gradient-primary rounded-full text-white">
-                  <Send className="h-4 w-4" />
-                </Button>
+              <div className="border-t border-border/50">
+                {/* Attachment preview */}
+                {attachmentPreview && (
+                  <div className="px-4 pt-3 flex items-center gap-3">
+                    {attachmentPreview.type === "image" && attachmentPreview.previewUrl ? (
+                      <img src={attachmentPreview.previewUrl} alt="" className="h-16 w-16 rounded-xl object-cover" />
+                    ) : (
+                      <div className="flex items-center gap-2 bg-muted rounded-xl px-3 py-2">
+                        <FileText className="h-4 w-4 text-primary" />
+                        <span className="text-xs truncate max-w-[200px]">{attachmentPreview.file.name}</span>
+                      </div>
+                    )}
+                    <button onClick={clearAttachment} className="text-muted-foreground hover:text-destructive">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+
+                <div className="p-4 flex gap-2 items-center">
+                  {/* Hidden file inputs */}
+                  <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileSelect(e, "image")} />
+                  <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.xlsx,.xls,.zip,.rar" className="hidden" onChange={(e) => handleFileSelect(e, "file")} />
+
+                  <button onClick={() => imageInputRef.current?.click()} className="text-muted-foreground hover:text-primary transition-colors p-1.5 rounded-full hover:bg-muted">
+                    <ImageIcon className="h-5 w-5" />
+                  </button>
+                  <button onClick={() => fileInputRef.current?.click()} className="text-muted-foreground hover:text-primary transition-colors p-1.5 rounded-full hover:bg-muted">
+                    <Paperclip className="h-5 w-5" />
+                  </button>
+
+                  <Input
+                    placeholder="Type a message..."
+                    value={newMsg}
+                    onChange={handleInputChange}
+                    onKeyDown={(e) => e.key === "Enter" && !uploading && handleSend()}
+                    className="rounded-full flex-1"
+                  />
+                  <Button onClick={handleSend} className="bg-gradient-primary rounded-full text-white" disabled={uploading}>
+                    {uploading ? (
+                      <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
               </div>
             )}
           </div>
