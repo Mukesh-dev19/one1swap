@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Menu, X, Plus, User, MessageSquare, Home, LayoutDashboard, LogOut } from "lucide-react";
+import { Menu, X, Plus, User, MessageSquare, Home, LayoutDashboard, LogOut, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import logo from "@/assets/logo.jpeg";
@@ -18,7 +18,8 @@ const Navbar = () => {
 
   const navLinks = user
     ? [
-        { to: "/marketplace", label: "Home", icon: Home },
+        { to: "/home", label: "Home", icon: Home },
+        { to: "/resources", label: "Resources", icon: BookOpen },
         { to: "/upload", label: "Upload", icon: Plus },
         { to: "/messages", label: "Messages", icon: MessageSquare },
         { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -28,7 +29,7 @@ const Navbar = () => {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-card/80 backdrop-blur-xl border-b border-border/50">
       <div className="container mx-auto flex items-center justify-between h-14 px-4">
-        <Link to={user ? "/marketplace" : "/"} className="flex items-center gap-2">
+        <Link to={user ? "/home" : "/"} className="flex items-center gap-2">
           <img src={logo} alt="OneSwap" className="h-8 w-8 rounded-lg object-cover" />
           <span className="font-heading text-lg font-bold text-gradient">OneSwap</span>
         </Link>

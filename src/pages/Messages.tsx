@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Send, User, Circle, Paperclip, Image as ImageIcon, FileText, X, Download } from "lucide-react";
+import { Send, User, Circle, Paperclip, Image as ImageIcon, FileText, X, Download, Check, CheckCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,7 +37,8 @@ const Messages = () => {
   const [otherTyping, setOtherTyping] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [attachmentPreview, setAttachmentPreview] = useState<{ file: File; previewUrl?: string; type: string } | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [showSidebar, setShowSidebar] = useState(true);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeChatRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -45,19 +46,42 @@ const Messages = () => {
 
   useEffect(() => { activeChatRef.current = activeChat; }, [activeChat]);
 
+  // Auto-scroll to bottom when messages change
+  const scrollToBottom = useCallback(() => {
+    if (messagesContainerRef.current) {
+      const container = messagesContainerRef.current;
+      container.scrollTop = container.scrollHeight;
+    }
+  }, []);
+
+  useEffect(() => {
+    // Small delay to ensure DOM is updated
+    const timer = setTimeout(scrollToBottom, 100);
+    return () => clearTimeout(timer);
+  }, [messages, scrollToBottom]);
+
   useEffect(() => {
     if (user) {
       fetchConversations();
       const channel = supabase
         .channel("messages-realtime")
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
-          const msg = payload.new as Message;
-          if (msg.sender_id === user.id || msg.receiver_id === user.id) {
-            const currentActive = activeChatRef.current;
-            if (currentActive && (msg.sender_id === currentActive || msg.receiver_id === currentActive)) {
-              setMessages((prev) => [...prev, msg]);
+        .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, (payload) => {
+          if (payload.eventType === "INSERT") {
+            const msg = payload.new as Message;
+            if (msg.sender_id === user.id || msg.receiver_id === user.id) {
+              const currentActive = activeChatRef.current;
+              if (currentActive && (msg.sender_id === currentActive || msg.receiver_id === currentActive)) {
+                setMessages((prev) => [...prev, msg]);
+                // Mark as read if we're the receiver
+                if (msg.receiver_id === user.id) {
+                  supabase.from("messages").update({ read: true }).eq("id", msg.id).then();
+                }
+              }
+              fetchConversations();
             }
-            fetchConversations();
+          } else if (payload.eventType === "UPDATE") {
+            const updated = payload.new as Message;
+            setMessages((prev) => prev.map((m) => m.id === updated.id ? updated : m));
           }
         })
         .subscribe();
@@ -87,10 +111,6 @@ const Messages = () => {
   useEffect(() => {
     if (activeChat) fetchMessages(activeChat);
   }, [activeChat]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
 
   const fetchConversations = async () => {
     if (!user) return;
@@ -220,6 +240,14 @@ const Messages = () => {
   const activeName = conversations.find((c) => c.userId === activeChat)?.name || "";
   const activeAvatar = conversations.find((c) => c.userId === activeChat)?.avatarUrl;
 
+  const renderTicks = (m: Message) => {
+    if (m.sender_id !== user?.id) return null;
+    if (m.read) {
+      return <CheckCheck className="h-3.5 w-3.5 text-blue-400 inline-block ml-1" />;
+    }
+    return <Check className="h-3.5 w-3.5 text-white/60 inline-block ml-1" />;
+  };
+
   const renderMessageContent = (m: Message) => {
     const isMine = m.sender_id === user?.id;
     return (
@@ -240,9 +268,12 @@ const Messages = () => {
         {m.content && !(m.attachment_type && (m.content === "📷 Photo" || m.content.startsWith("📎"))) && (
           <p>{m.content}</p>
         )}
-        <p className={`text-xs mt-1 ${isMine ? "text-white/60" : "text-muted-foreground"}`}>
-          {new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-        </p>
+        <div className={`flex items-center justify-end gap-0.5 mt-1 ${isMine ? "text-white/60" : "text-muted-foreground"}`}>
+          <span className="text-xs">
+            {new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </span>
+          {renderTicks(m)}
+        </div>
       </>
     );
   };
@@ -259,7 +290,7 @@ const Messages = () => {
 
         <div className="bg-card rounded-2xl overflow-hidden grid md:grid-cols-[280px_1fr] h-[70vh] shadow-soft border border-border/50">
           {/* Sidebar */}
-          <div className="border-r border-border/50 overflow-y-auto">
+          <div className={`border-r border-border/50 overflow-y-auto ${activeChat && !showSidebar ? "hidden md:block" : ""}`}>
             {conversations.length === 0 ? (
               <div className="p-6 text-center text-muted-foreground text-sm">
                 No conversations yet. Start chatting from a resource page!
@@ -269,7 +300,7 @@ const Messages = () => {
                 <button
                   key={c.userId}
                   className={`w-full p-4 text-left flex items-center gap-3 hover:bg-muted/50 transition-colors ${activeChat === c.userId ? "bg-muted/50" : ""}`}
-                  onClick={() => setActiveChat(c.userId)}
+                  onClick={() => { setActiveChat(c.userId); setShowSidebar(false); }}
                 >
                   <div className="relative">
                     {c.avatarUrl ? (
@@ -298,10 +329,13 @@ const Messages = () => {
             )}
           </div>
 
-          {/* Chat */}
+          {/* Chat area */}
           <div className="flex flex-col">
             {activeChat && (
               <div className="px-4 py-3 border-b border-border/50 flex items-center gap-3">
+                <button className="md:hidden text-muted-foreground mr-1" onClick={() => setShowSidebar(true)}>
+                  ←
+                </button>
                 <div className="relative">
                   {activeAvatar ? (
                     <img src={activeAvatar} alt="" className="h-8 w-8 rounded-full object-cover" />
@@ -323,35 +357,37 @@ const Messages = () => {
               </div>
             )}
 
-            <div className="flex-1 p-4 overflow-y-auto space-y-3">
-              {messages.map((m) => (
-                <div key={m.id} className={`flex ${m.sender_id === user?.id ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[70%] rounded-2xl px-4 py-2 text-sm ${
-                    m.sender_id === user?.id
-                      ? "bg-gradient-primary text-white"
-                      : "bg-muted text-foreground"
-                  }`}>
-                    {renderMessageContent(m)}
+            {/* Messages - flex-col-reverse ensures scroll starts at bottom */}
+            <div ref={messagesContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col">
+              <div className="flex-1" /> {/* Spacer pushes messages to bottom when few */}
+              <div className="space-y-3">
+                {messages.map((m) => (
+                  <div key={m.id} className={`flex ${m.sender_id === user?.id ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[70%] rounded-2xl px-4 py-2 text-sm ${
+                      m.sender_id === user?.id
+                        ? "bg-gradient-primary text-white"
+                        : "bg-muted text-foreground"
+                    }`}>
+                      {renderMessageContent(m)}
+                    </div>
                   </div>
-                </div>
-              ))}
-              {otherTyping && (
-                <div className="flex justify-start">
-                  <div className="bg-muted rounded-2xl px-4 py-2 text-sm text-muted-foreground">
-                    <span className="flex gap-1">
-                      <span className="animate-bounce" style={{ animationDelay: "0ms" }}>•</span>
-                      <span className="animate-bounce" style={{ animationDelay: "150ms" }}>•</span>
-                      <span className="animate-bounce" style={{ animationDelay: "300ms" }}>•</span>
-                    </span>
+                ))}
+                {otherTyping && (
+                  <div className="flex justify-start">
+                    <div className="bg-muted rounded-2xl px-4 py-2 text-sm text-muted-foreground">
+                      <span className="flex gap-1">
+                        <span className="animate-bounce" style={{ animationDelay: "0ms" }}>•</span>
+                        <span className="animate-bounce" style={{ animationDelay: "150ms" }}>•</span>
+                        <span className="animate-bounce" style={{ animationDelay: "300ms" }}>•</span>
+                      </span>
+                    </div>
                   </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
+                )}
+              </div>
             </div>
 
             {activeChat && (
               <div className="border-t border-border/50">
-                {/* Attachment preview */}
                 {attachmentPreview && (
                   <div className="px-4 pt-3 flex items-center gap-3">
                     {attachmentPreview.type === "image" && attachmentPreview.previewUrl ? (
@@ -369,7 +405,6 @@ const Messages = () => {
                 )}
 
                 <div className="p-4 flex gap-2 items-center">
-                  {/* Hidden file inputs */}
                   <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileSelect(e, "image")} />
                   <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.xlsx,.xls,.zip,.rar" className="hidden" onChange={(e) => handleFileSelect(e, "file")} />
 

@@ -34,7 +34,7 @@ const Index = () => {
   const { user, loading } = useAuth();
 
   if (!loading && user) {
-    return <Navigate to="/marketplace" replace />;
+    return <Navigate to="/home" replace />;
   }
 
   return (

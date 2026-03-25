@@ -8,7 +8,9 @@ import ScrollToTop from "@/components/ScrollToTop";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import Index from "./pages/Index";
+import Home from "./pages/Home";
 import Marketplace from "./pages/Marketplace";
+import Resources from "./pages/Resources";
 import UploadResource from "./pages/UploadResource";
 import ResourceDetail from "./pages/ResourceDetail";
 import Messages from "./pages/Messages";
@@ -32,7 +34,9 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
             <Route path="/marketplace" element={<ProtectedRoute><Marketplace /></ProtectedRoute>} />
+            <Route path="/resources" element={<ProtectedRoute><Resources /></ProtectedRoute>} />
             <Route path="/upload" element={<ProtectedRoute><UploadResource /></ProtectedRoute>} />
             <Route path="/resource/:id" element={<ProtectedRoute><ResourceDetail /></ProtectedRoute>} />
             <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
