@@ -31,6 +31,12 @@ const steps = [
 ];
 
 const Index = () => {
+  const { user, loading } = useAuth();
+
+  if (!loading && user) {
+    return <Navigate to="/marketplace" replace />;
+  }
+
   return (
     <div className="min-h-screen">
       {/* Hero */}
