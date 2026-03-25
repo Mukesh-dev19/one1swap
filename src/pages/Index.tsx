@@ -1,7 +1,8 @@
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowRight, BookOpen, Recycle, Users, Zap, Shield, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
 import logo from "@/assets/logo.jpeg";
 
 const fadeUp = {
@@ -30,6 +31,12 @@ const steps = [
 ];
 
 const Index = () => {
+  const { user, loading } = useAuth();
+
+  if (!loading && user) {
+    return <Navigate to="/marketplace" replace />;
+  }
+
   return (
     <div className="min-h-screen">
       {/* Hero */}
