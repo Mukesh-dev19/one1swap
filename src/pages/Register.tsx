@@ -12,12 +12,17 @@ import { useAuth } from "@/contexts/AuthContext";
 import logo from "@/assets/logo.jpeg";
 
 const Register = () => {
+  const { user, loading: authLoading } = useAuth();
   const [showPw, setShowPw] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  if (!authLoading && user) {
+    return <Navigate to="/marketplace" replace />;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
