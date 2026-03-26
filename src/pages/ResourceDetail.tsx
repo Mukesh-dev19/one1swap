@@ -43,6 +43,8 @@ const ResourceDetail = () => {
   const [requestMsg, setRequestMsg] = useState("");
   const [sellerName, setSellerName] = useState("");
   const [loading, setLoading] = useState(true);
+  const [requestSubmitting, setRequestSubmitting] = useState(false);
+  const [hasRequested, setHasRequested] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -51,7 +53,7 @@ const ResourceDetail = () => {
       const cleanup = subscribeToRequests();
       return cleanup;
     }
-  }, [id]);
+  }, [id, user?.id]);
 
   const fetchResource = async () => {
     const { data } = await supabase.from("resources").select("*").eq("id", id).single();
@@ -77,6 +79,7 @@ const ResourceDetail = () => {
         })
       );
       setRequests(enriched);
+      setHasRequested(Boolean(user && data.some((req) => req.user_id === user.id)));
     }
   };
 
@@ -87,7 +90,8 @@ const ResourceDetail = () => {
         if (payload.eventType === "INSERT") {
           const newReq = payload.new as any;
           const { data: profile } = await supabase.from("profiles").select("full_name").eq("user_id", newReq.user_id).single();
-          setRequests((prev) => [...prev, { ...newReq, profiles: profile }]);
+          setRequests((prev) => prev.some((req) => req.id === newReq.id) ? prev : [...prev, { ...newReq, profiles: profile }]);
+          if (newReq.user_id === user?.id) setHasRequested(true);
         } else if (payload.eventType === "UPDATE") {
           const updated = payload.new as any;
           setRequests((prev) => prev.map((r) => r.id === updated.id ? { ...r, status: updated.status } : r));
@@ -98,16 +102,24 @@ const ResourceDetail = () => {
   };
 
   const handleSendRequest = async () => {
-    if (!requestMsg.trim() || !user || !id) return;
+    if (!requestMsg.trim() || !user || !id || requestSubmitting || hasRequested) return;
+    setRequestSubmitting(true);
     const { error } = await supabase.from("resource_requests").insert({
       resource_id: id,
       user_id: user.id,
       message: requestMsg,
     });
+    setRequestSubmitting(false);
     if (error) {
+      if (error.code === "23505") {
+        setHasRequested(true);
+        toast({ title: "Request already sent", description: "You can only send one request for this resource." });
+        return;
+      }
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
       setRequestMsg("");
+      setHasRequested(true);
       toast({ title: "Request sent! 🎉", description: "First come, first served!" });
     }
   };
@@ -263,9 +275,10 @@ const ResourceDetail = () => {
                 onChange={(e) => setRequestMsg(e.target.value)}
                 className="rounded-full"
                 onKeyDown={(e) => e.key === "Enter" && handleSendRequest()}
+                disabled={hasRequested || requestSubmitting}
               />
-              <Button onClick={handleSendRequest} className="bg-gradient-primary gap-1 text-white rounded-full">
-                <Send className="h-4 w-4" /> Send
+              <Button onClick={handleSendRequest} className="bg-gradient-primary gap-1 text-white rounded-full" disabled={hasRequested || requestSubmitting}>
+                <Send className="h-4 w-4" /> {hasRequested ? "Sent" : requestSubmitting ? "Sending..." : "Send"}
               </Button>
             </div>
           )}
