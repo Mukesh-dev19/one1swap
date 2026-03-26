@@ -20,7 +20,7 @@ const Login = () => {
   const navigate = useNavigate();
 
   if (!authLoading && user) {
-    return <Navigate to="/marketplace" replace />;
+    return <Navigate to="/home" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -36,7 +36,7 @@ const Login = () => {
       toast({ title: "Login failed", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Welcome back!", description: "You've signed in successfully." });
-      navigate("/marketplace");
+      navigate("/home");
     }
   };
 

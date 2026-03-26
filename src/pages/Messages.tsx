@@ -266,7 +266,7 @@ const Messages = () => {
           </a>
         )}
         {m.content && !(m.attachment_type && (m.content === "📷 Photo" || m.content.startsWith("📎"))) && (
-          <p>{m.content}</p>
+          <p className="break-words whitespace-pre-wrap leading-relaxed">{m.content}</p>
         )}
         <div className={`flex items-center justify-end gap-0.5 mt-1 ${isMine ? "text-white/60" : "text-muted-foreground"}`}>
           <span className="text-xs">
@@ -288,9 +288,9 @@ const Messages = () => {
           <span className="text-gradient">Messages</span>
         </motion.h1>
 
-        <div className="bg-card rounded-2xl overflow-hidden grid md:grid-cols-[280px_1fr] h-[70vh] shadow-soft border border-border/50">
+        <div className="bg-card rounded-2xl overflow-hidden grid md:grid-cols-[280px_1fr] h-[70vh] min-h-0 shadow-soft border border-border/50">
           {/* Sidebar */}
-          <div className={`border-r border-border/50 overflow-y-auto ${activeChat && !showSidebar ? "hidden md:block" : ""}`}>
+          <div className={`border-r border-border/50 min-h-0 overflow-y-auto overflow-x-hidden ${activeChat && !showSidebar ? "hidden md:block" : ""}`}>
             {conversations.length === 0 ? (
               <div className="p-6 text-center text-muted-foreground text-sm">
                 No conversations yet. Start chatting from a resource page!
@@ -330,7 +330,7 @@ const Messages = () => {
           </div>
 
           {/* Chat area */}
-          <div className="flex flex-col">
+            <div className="flex min-h-0 flex-col">
             {activeChat && (
               <div className="px-4 py-3 border-b border-border/50 flex items-center gap-3">
                 <button className="md:hidden text-muted-foreground mr-1" onClick={() => setShowSidebar(true)}>
@@ -358,12 +358,12 @@ const Messages = () => {
             )}
 
             {/* Messages - flex-col-reverse ensures scroll starts at bottom */}
-            <div ref={messagesContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col">
-              <div className="flex-1" /> {/* Spacer pushes messages to bottom when few */}
-              <div className="space-y-3">
+              <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-4">
+                <div className="flex min-h-full flex-col justify-end">
+                  <div className="space-y-3">
                 {messages.map((m) => (
                   <div key={m.id} className={`flex ${m.sender_id === user?.id ? "justify-end" : "justify-start"}`}>
-                    <div className={`max-w-[70%] rounded-2xl px-4 py-2 text-sm ${
+                    <div className={`max-w-[78%] overflow-hidden rounded-2xl px-4 py-2 text-sm shadow-sm ${
                       m.sender_id === user?.id
                         ? "bg-gradient-primary text-white"
                         : "bg-muted text-foreground"
@@ -383,6 +383,7 @@ const Messages = () => {
                     </div>
                   </div>
                 )}
+                  </div>
               </div>
             </div>
 
@@ -420,7 +421,7 @@ const Messages = () => {
                     value={newMsg}
                     onChange={handleInputChange}
                     onKeyDown={(e) => e.key === "Enter" && !uploading && handleSend()}
-                    className="rounded-full flex-1"
+                    className="min-w-0 flex-1 rounded-full"
                   />
                   <Button onClick={handleSend} className="bg-gradient-primary rounded-full text-white" disabled={uploading}>
                     {uploading ? (

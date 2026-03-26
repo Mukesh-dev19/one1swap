@@ -21,7 +21,7 @@ const Register = () => {
   const navigate = useNavigate();
 
   if (!authLoading && user) {
-    return <Navigate to="/marketplace" replace />;
+    return <Navigate to="/home" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {

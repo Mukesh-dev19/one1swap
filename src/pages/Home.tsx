@@ -11,6 +11,13 @@ const fadeUp = {
 
 const quickActions = [
   {
+    to: "/messages",
+    icon: MessageSquare,
+    title: "Messages",
+    desc: "Chat first, reply faster, and stay updated instantly",
+    gradient: "from-orange-400 to-yellow-400",
+  },
+  {
     to: "/resources",
     icon: Search,
     title: "Browse Resources",
@@ -23,13 +30,6 @@ const quickActions = [
     title: "Upload Resource",
     desc: "Share your items with the community",
     gradient: "from-pink-500 to-orange-400",
-  },
-  {
-    to: "/messages",
-    icon: MessageSquare,
-    title: "Messages",
-    desc: "Chat with buyers & sellers instantly",
-    gradient: "from-orange-400 to-yellow-400",
   },
   {
     to: "/dashboard",
@@ -78,8 +78,24 @@ const Home = () => {
               variants={fadeUp}
               custom={2}
             >
-              What would you like to do today? Explore resources, upload something new, or connect with peers.
+              Enjoy the OneSwap experience from one place — start with messages, explore resources, upload something new, or open your dashboard.
             </motion.p>
+            <motion.div
+              className="mt-6 flex flex-wrap items-center justify-center gap-3"
+              variants={fadeUp}
+              custom={3}
+            >
+              <Link to="/messages">
+                <button className="bg-gradient-primary rounded-full px-6 py-3 text-sm font-semibold text-white shadow-glow transition-transform hover:scale-[1.02]">
+                  Open Messages
+                </button>
+              </Link>
+              <Link to="/resources">
+                <button className="rounded-full border border-border bg-card px-6 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+                  Explore Resources
+                </button>
+              </Link>
+            </motion.div>
           </motion.div>
         </div>
       </section>
@@ -94,7 +110,7 @@ const Home = () => {
                 initial="hidden"
                 animate="visible"
                 variants={fadeUp}
-                custom={i + 3}
+                custom={i + 4}
               >
                 <Link to={action.to}>
                   <div className="bg-card rounded-2xl p-6 shadow-soft hover:shadow-glow transition-all border border-border/50 group cursor-pointer h-full">
