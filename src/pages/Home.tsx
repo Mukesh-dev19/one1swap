@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Search, Upload, MessageSquare, LayoutDashboard, User, BookOpen, Sparkles, Users } from "lucide-react";
+import { Search, MessageSquare, LayoutDashboard, User, BookOpen, Sparkles } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import logo from "@/assets/logo.jpeg";
 
@@ -14,7 +14,7 @@ const quickActions = [
     to: "/messages",
     icon: MessageSquare,
     title: "Messages",
-    desc: "Chat first, reply faster, and stay updated instantly",
+    desc: "Chat, find friends, send requests & create groups",
     gradient: "from-orange-400 to-yellow-400",
   },
   {
@@ -25,25 +25,11 @@ const quickActions = [
     gradient: "from-purple-500 to-pink-500",
   },
   {
-    to: "/upload",
-    icon: Upload,
-    title: "Upload Resource",
-    desc: "Share your items with the community",
-    gradient: "from-pink-500 to-orange-400",
-  },
-  {
     to: "/dashboard",
     icon: LayoutDashboard,
     title: "Dashboard",
     desc: "Track your uploads, saves & activity",
     gradient: "from-blue-500 to-purple-500",
-  },
-  {
-    to: "/friends",
-    icon: Users,
-    title: "Friends",
-    desc: "Find friends, send requests & create groups",
-    gradient: "from-green-400 to-teal-500",
   },
 ];
 

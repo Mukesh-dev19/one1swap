@@ -19,7 +19,7 @@ import Register from "./pages/Register";
 import Profile from "./pages/Profile";
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
-import Friends from "./pages/Friends";
+// Friends is now integrated into Messages page
 
 const queryClient = new QueryClient();
 
@@ -41,7 +41,7 @@ const App = () => (
             <Route path="/upload" element={<ProtectedRoute><UploadResource /></ProtectedRoute>} />
             <Route path="/resource/:id" element={<ProtectedRoute><ResourceDetail /></ProtectedRoute>} />
             <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
-            <Route path="/friends" element={<ProtectedRoute><Friends /></ProtectedRoute>} />
+            {/* Friends page removed - integrated into Messages */}
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
