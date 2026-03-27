@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Send, User, Circle, Paperclip, Image as ImageIcon, FileText, X, Download, Check, CheckCheck } from "lucide-react";
+import { Send, User, Circle, Paperclip, Image as ImageIcon, FileText, X, Download, Check, CheckCheck, Users, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import CreateGroupDialog from "@/components/CreateGroupDialog";
+import { Link } from "react-router-dom";
 
 interface Message {
   id: string;
@@ -25,12 +27,14 @@ interface Conversation {
   lastTime: string;
   unread: number;
   avatarUrl: string | null;
+  isGroup?: boolean;
+  groupId?: string;
 }
 
 const Messages = () => {
   const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeChat, setActiveChat] = useState<string | null>(null);
+  const [activeChat, setActiveChat] = useState<string | null>(null); // DM userId or group:<groupId>
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMsg, setNewMsg] = useState("");
   const [typing, setTyping] = useState(false);
@@ -38,6 +42,8 @@ const Messages = () => {
   const [uploading, setUploading] = useState(false);
   const [attachmentPreview, setAttachmentPreview] = useState<{ file: File; previewUrl?: string; type: string } | null>(null);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [groupMessages, setGroupMessages] = useState<any[]>([]);
+  const [chatMode, setChatMode] = useState<"dm" | "group">("dm");
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeChatRef = useRef<string | null>(null);
@@ -101,15 +107,37 @@ const Messages = () => {
           }
         });
 
+      // Group messages realtime
+      const groupChannel = supabase
+        .channel("group-messages-realtime")
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "group_messages" }, (payload) => {
+          const msg = payload.new as any;
+          const currentActive = activeChatRef.current;
+          if (currentActive && currentActive === `group:${msg.group_id}`) {
+            setGroupMessages((prev) => [...prev, msg]);
+          }
+          fetchConversations();
+        })
+        .subscribe();
+
       return () => {
         supabase.removeChannel(channel);
         supabase.removeChannel(presenceChannel);
+        supabase.removeChannel(groupChannel);
       };
     }
   }, [user]);
 
   useEffect(() => {
-    if (activeChat) fetchMessages(activeChat);
+    if (activeChat) {
+      if (activeChat.startsWith("group:")) {
+        setChatMode("group");
+        fetchGroupMessages(activeChat.replace("group:", ""));
+      } else {
+        setChatMode("dm");
+        fetchMessages(activeChat);
+      }
+    }
   }, [activeChat]);
 
   const fetchConversations = async () => {
@@ -148,7 +176,39 @@ const Messages = () => {
       });
     }
     setConversations(convs);
+
+    // Fetch group conversations
+    const { data: memberData } = await supabase.from("group_members").select("group_id").eq("user_id", user.id);
+    if (memberData) {
+      for (const gm of memberData) {
+        const { data: group } = await supabase.from("group_chats").select("*").eq("id", gm.group_id).single();
+        if (!group) continue;
+        const { data: lastGMsg } = await supabase.from("group_messages").select("*").eq("group_id", gm.group_id).order("created_at", { ascending: false }).limit(1);
+        const lastMsg = lastGMsg?.[0];
+        convs.push({
+          userId: `group:${group.id}`,
+          groupId: group.id,
+          name: group.name,
+          avatarUrl: group.avatar_url || null,
+          lastMessage: lastMsg?.content || "No messages yet",
+          lastTime: lastMsg ? new Date(lastMsg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "",
+          unread: 0,
+          isGroup: true,
+        });
+      }
+    }
+
+    setConversations(convs);
     if (convs.length > 0 && !activeChatRef.current) setActiveChat(convs[0].userId);
+  };
+
+  const fetchGroupMessages = async (groupId: string) => {
+    const { data } = await supabase
+      .from("group_messages")
+      .select("*")
+      .eq("group_id", groupId)
+      .order("created_at", { ascending: true });
+    if (data) setGroupMessages(data);
   };
 
   const fetchMessages = async (otherUserId: string) => {
@@ -204,6 +264,42 @@ const Messages = () => {
   const handleSend = async () => {
     if ((!newMsg.trim() && !attachmentPreview) || !user || !activeChat) return;
 
+    // Group message
+    if (activeChat.startsWith("group:")) {
+      const groupId = activeChat.replace("group:", "");
+      let attachmentUrl: string | null = null;
+      let attachmentType: string | null = null;
+      let attachmentName: string | null = null;
+
+      if (attachmentPreview) {
+        setUploading(true);
+        const file = attachmentPreview.file;
+        const ext = file.name.split(".").pop();
+        const bucket = attachmentPreview.type === "image" ? "resource-images" : "resource-files";
+        const filePath = `group/${groupId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+        const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file);
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(filePath);
+          attachmentUrl = urlData.publicUrl;
+          attachmentType = attachmentPreview.type;
+          attachmentName = file.name;
+        }
+        setUploading(false);
+      }
+
+      await supabase.from("group_messages").insert({
+        group_id: groupId,
+        sender_id: user.id,
+        content: newMsg.trim() || (attachmentType === "image" ? "📷 Photo" : `📎 ${attachmentName}`),
+        attachment_url: attachmentUrl,
+        attachment_type: attachmentType,
+        attachment_name: attachmentName,
+      });
+      setNewMsg("");
+      setAttachmentPreview(null);
+      return;
+    }
+
     let attachmentUrl: string | null = null;
     let attachmentType: string | null = null;
     let attachmentName: string | null = null;
@@ -237,8 +333,10 @@ const Messages = () => {
     setAttachmentPreview(null);
   };
 
-  const activeName = conversations.find((c) => c.userId === activeChat)?.name || "";
-  const activeAvatar = conversations.find((c) => c.userId === activeChat)?.avatarUrl;
+  const activeConv = conversations.find((c) => c.userId === activeChat);
+  const activeName = activeConv?.name || "";
+  const activeAvatar = activeConv?.avatarUrl;
+  const isGroupChat = activeConv?.isGroup;
 
   const renderTicks = (m: Message) => {
     if (m.sender_id !== user?.id) return null;
@@ -287,6 +385,14 @@ const Messages = () => {
         >
           <span className="text-gradient">Messages</span>
         </motion.h1>
+        <div className="flex items-center gap-2 mb-4">
+          <CreateGroupDialog onGroupCreated={fetchConversations} />
+          <Link to="/friends">
+            <Button size="sm" variant="outline" className="gap-1.5 rounded-full">
+              <Users className="h-4 w-4" /> Friends
+            </Button>
+          </Link>
+        </div>
 
         <div className="bg-card rounded-2xl overflow-hidden grid md:grid-cols-[280px_1fr] h-[70vh] min-h-0 shadow-soft border border-border/50">
           {/* Sidebar */}
@@ -303,18 +409,22 @@ const Messages = () => {
                   onClick={() => { setActiveChat(c.userId); setShowSidebar(false); }}
                 >
                   <div className="relative">
-                    {c.avatarUrl ? (
+                    {c.isGroup ? (
+                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shrink-0">
+                        <Users className="h-5 w-5 text-white" />
+                      </div>
+                    ) : c.avatarUrl ? (
                       <img src={c.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
                     ) : (
                       <div className="h-10 w-10 rounded-full bg-gradient-primary flex items-center justify-center shrink-0">
                         <User className="h-5 w-5 text-white" />
                       </div>
                     )}
-                    <Circle className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 text-primary fill-primary" />
+                    {!c.isGroup && <Circle className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 text-primary fill-primary" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold text-sm">{c.name}</span>
+                      <span className="font-semibold text-sm">{c.name}{c.isGroup && " 👥"}</span>
                       <span className="text-xs text-muted-foreground">{c.lastTime}</span>
                     </div>
                     <p className="text-xs text-muted-foreground truncate">{c.lastMessage}</p>
@@ -337,19 +447,25 @@ const Messages = () => {
                   ←
                 </button>
                 <div className="relative">
-                  {activeAvatar ? (
+                  {isGroupChat ? (
+                    <div className="h-8 w-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                      <Users className="h-4 w-4 text-white" />
+                    </div>
+                  ) : activeAvatar ? (
                     <img src={activeAvatar} alt="" className="h-8 w-8 rounded-full object-cover" />
                   ) : (
                     <div className="h-8 w-8 rounded-full bg-gradient-primary flex items-center justify-center">
                       <User className="h-4 w-4 text-white" />
                     </div>
                   )}
-                  <Circle className="absolute -bottom-0.5 -right-0.5 h-3 w-3 text-primary fill-primary" />
+                  {!isGroupChat && <Circle className="absolute -bottom-0.5 -right-0.5 h-3 w-3 text-primary fill-primary" />}
                 </div>
                 <div>
-                  <p className="font-semibold text-sm">{activeName}</p>
+                  <p className="font-semibold text-sm">{activeName}{isGroupChat ? " 👥" : ""}</p>
                   {otherTyping ? (
                     <p className="text-xs text-primary animate-pulse">typing...</p>
+                  ) : isGroupChat ? (
+                    <p className="text-xs text-muted-foreground">Group chat</p>
                   ) : (
                     <p className="text-xs text-primary">online</p>
                   )}
@@ -361,17 +477,54 @@ const Messages = () => {
               <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-4">
                 <div className="flex min-h-full flex-col justify-end">
                   <div className="space-y-3">
-                {messages.map((m) => (
-                  <div key={m.id} className={`flex ${m.sender_id === user?.id ? "justify-end" : "justify-start"}`}>
-                    <div className={`max-w-[78%] overflow-hidden rounded-2xl px-4 py-2 text-sm shadow-sm ${
-                      m.sender_id === user?.id
-                        ? "bg-gradient-primary text-white"
-                        : "bg-muted text-foreground"
-                    }`}>
-                      {renderMessageContent(m)}
+                {chatMode === "dm" ? (
+                  messages.map((m) => (
+                    <div key={m.id} className={`flex ${m.sender_id === user?.id ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[78%] overflow-hidden rounded-2xl px-4 py-2 text-sm shadow-sm ${
+                        m.sender_id === user?.id
+                          ? "bg-gradient-primary text-white"
+                          : "bg-muted text-foreground"
+                      }`}>
+                        {renderMessageContent(m)}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  groupMessages.map((m) => (
+                    <div key={m.id} className={`flex ${m.sender_id === user?.id ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[78%] overflow-hidden rounded-2xl px-4 py-2 text-sm shadow-sm ${
+                        m.sender_id === user?.id
+                          ? "bg-gradient-primary text-white"
+                          : "bg-muted text-foreground"
+                      }`}>
+                        {m.sender_id !== user?.id && (
+                          <p className="text-xs font-semibold mb-1 opacity-70">Member</p>
+                        )}
+                        {m.attachment_type === "image" && m.attachment_url && (
+                          <a href={m.attachment_url} target="_blank" rel="noopener noreferrer">
+                            <img src={m.attachment_url} alt="Shared" className="rounded-xl max-w-[240px] max-h-[200px] object-cover mb-1" />
+                          </a>
+                        )}
+                        {m.attachment_type === "file" && m.attachment_url && (
+                          <a href={m.attachment_url} target="_blank" rel="noopener noreferrer"
+                            className={`flex items-center gap-2 rounded-xl px-3 py-2 mb-1 ${m.sender_id === user?.id ? "bg-white/20" : "bg-muted"}`}>
+                            <FileText className="h-4 w-4 shrink-0" />
+                            <span className="text-xs truncate max-w-[150px]">{m.attachment_name || "File"}</span>
+                            <Download className="h-4 w-4 shrink-0" />
+                          </a>
+                        )}
+                        {m.content && !(m.attachment_type && (m.content === "📷 Photo" || m.content.startsWith("📎"))) && (
+                          <p className="break-words whitespace-pre-wrap leading-relaxed">{m.content}</p>
+                        )}
+                        <div className="flex items-center justify-end mt-1">
+                          <span className="text-xs opacity-60">
+                            {new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
                 {otherTyping && (
                   <div className="flex justify-start">
                     <div className="bg-muted rounded-2xl px-4 py-2 text-sm text-muted-foreground">

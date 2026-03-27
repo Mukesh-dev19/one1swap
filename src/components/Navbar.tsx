@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Menu, X, Plus, User, MessageSquare, Home, LayoutDashboard, LogOut, BookOpen } from "lucide-react";
+import { Menu, X, Plus, User, MessageSquare, Home, LayoutDashboard, LogOut, BookOpen, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import logo from "@/assets/logo.jpeg";
@@ -22,6 +22,7 @@ const Navbar = () => {
         { to: "/resources", label: "Resources", icon: BookOpen },
         { to: "/upload", label: "Upload", icon: Plus },
         { to: "/messages", label: "Messages", icon: MessageSquare },
+        { to: "/friends", label: "Friends", icon: Users },
         { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       ]
     : [{ to: "/", label: "Home", icon: Home }];
