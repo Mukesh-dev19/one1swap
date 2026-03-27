@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Search, SlidersHorizontal, Grid3X3, List, MapPin, Bookmark, BookmarkCheck, FileText } from "lucide-react";
+import { Search, SlidersHorizontal, Grid3X3, List, MapPin, Bookmark, BookmarkCheck, FileText, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
