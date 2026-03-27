@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Menu, X, Plus, User, MessageSquare, Home, LayoutDashboard, LogOut, BookOpen, Users } from "lucide-react";
+import { Menu, X, User, MessageSquare, Home, LayoutDashboard, LogOut, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import logo from "@/assets/logo.jpeg";

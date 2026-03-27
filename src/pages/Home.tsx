@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Search, Upload, MessageSquare, LayoutDashboard, User, BookOpen, Sparkles, Users } from "lucide-react";
+import { Search, MessageSquare, LayoutDashboard, User, BookOpen, Sparkles } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import logo from "@/assets/logo.jpeg";
 
