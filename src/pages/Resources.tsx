@@ -209,11 +209,15 @@ const Resources = () => {
             <Search className="h-12 w-12 mx-auto mb-4 opacity-40" />
             <p className="font-heading font-semibold text-lg mb-2">No resources yet</p>
             <p className="text-sm">Be the first to upload a resource!</p>
-            <Link to="/upload">
-              <Button className="mt-4 bg-gradient-primary text-white">Upload Resource</Button>
-            </Link>
           </div>
         )}
+
+        {/* Floating Upload Button */}
+        <Link to="/upload" className="fixed bottom-6 right-6 z-40">
+          <Button className="h-14 w-14 rounded-full bg-gradient-primary text-white shadow-glow hover:scale-105 transition-transform p-0">
+            <Plus className="h-6 w-6" />
+          </Button>
+        </Link>
       </div>
     </div>
   );

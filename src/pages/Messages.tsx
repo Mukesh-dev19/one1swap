@@ -1,12 +1,20 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Send, User, Circle, Paperclip, Image as ImageIcon, FileText, X, Download, Check, CheckCheck, Users, Plus } from "lucide-react";
+import {
+  Send, User, Circle, Paperclip, Image as ImageIcon, FileText, X, Download,
+  Check, CheckCheck, Users, Plus, Search, UserPlus, UserCheck, UserX,
+  MessageSquare, Settings, LogOut as LeaveIcon, ChevronLeft
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/hooks/use-toast";
 import CreateGroupDialog from "@/components/CreateGroupDialog";
-import { Link } from "react-router-dom";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle
+} from "@/components/ui/dialog";
 
 interface Message {
   id: string;
@@ -31,10 +39,36 @@ interface Conversation {
   groupId?: string;
 }
 
+interface Profile {
+  user_id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  college: string | null;
+}
+
+interface FriendRequest {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  status: string;
+  created_at: string;
+  profile?: Profile;
+}
+
+interface Friendship {
+  id: string;
+  user_id: string;
+  friend_id: string;
+  created_at: string;
+  profile?: Profile;
+}
+
+type SidebarTab = "chats" | "friends" | "requests" | "find";
+
 const Messages = () => {
   const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeChat, setActiveChat] = useState<string | null>(null); // DM userId or group:<groupId>
+  const [activeChat, setActiveChat] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMsg, setNewMsg] = useState("");
   const [typing, setTyping] = useState(false);
@@ -44,6 +78,21 @@ const Messages = () => {
   const [showSidebar, setShowSidebar] = useState(true);
   const [groupMessages, setGroupMessages] = useState<any[]>([]);
   const [chatMode, setChatMode] = useState<"dm" | "group">("dm");
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("chats");
+  const [senderNames, setSenderNames] = useState<Record<string, string>>({});
+
+  // Friends state
+  const [friends, setFriends] = useState<Friendship[]>([]);
+  const [incomingRequests, setIncomingRequests] = useState<FriendRequest[]>([]);
+  const [sentRequests, setSentRequests] = useState<FriendRequest[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Profile[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  // Group management
+  const [groupInfoOpen, setGroupInfoOpen] = useState(false);
+  const [groupMembers, setGroupMembers] = useState<Profile[]>([]);
+
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeChatRef = useRef<string | null>(null);
@@ -52,23 +101,24 @@ const Messages = () => {
 
   useEffect(() => { activeChatRef.current = activeChat; }, [activeChat]);
 
-  // Auto-scroll to bottom when messages change
   const scrollToBottom = useCallback(() => {
     if (messagesContainerRef.current) {
-      const container = messagesContainerRef.current;
-      container.scrollTop = container.scrollHeight;
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
     }
   }, []);
 
   useEffect(() => {
-    // Small delay to ensure DOM is updated
     const timer = setTimeout(scrollToBottom, 100);
     return () => clearTimeout(timer);
-  }, [messages, scrollToBottom]);
+  }, [messages, groupMessages, scrollToBottom]);
 
+  // Fetch friends & requests
   useEffect(() => {
     if (user) {
+      fetchFriends();
+      fetchRequests();
       fetchConversations();
+
       const channel = supabase
         .channel("messages-realtime")
         .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, (payload) => {
@@ -78,7 +128,6 @@ const Messages = () => {
               const currentActive = activeChatRef.current;
               if (currentActive && (msg.sender_id === currentActive || msg.receiver_id === currentActive)) {
                 setMessages((prev) => [...prev, msg]);
-                // Mark as read if we're the receiver
                 if (msg.receiver_id === user.id) {
                   supabase.from("messages").update({ read: true }).eq("id", msg.id).then();
                 }
@@ -107,7 +156,6 @@ const Messages = () => {
           }
         });
 
-      // Group messages realtime
       const groupChannel = supabase
         .channel("group-messages-realtime")
         .on("postgres_changes", { event: "INSERT", schema: "public", table: "group_messages" }, (payload) => {
@@ -120,10 +168,18 @@ const Messages = () => {
         })
         .subscribe();
 
+      const friendChannel = supabase
+        .channel("friend-requests-realtime")
+        .on("postgres_changes", { event: "*", schema: "public", table: "friend_requests" }, () => {
+          fetchRequests();
+        })
+        .subscribe();
+
       return () => {
         supabase.removeChannel(channel);
         supabase.removeChannel(presenceChannel);
         supabase.removeChannel(groupChannel);
+        supabase.removeChannel(friendChannel);
       };
     }
   }, [user]);
@@ -132,13 +188,61 @@ const Messages = () => {
     if (activeChat) {
       if (activeChat.startsWith("group:")) {
         setChatMode("group");
-        fetchGroupMessages(activeChat.replace("group:", ""));
+        const groupId = activeChat.replace("group:", "");
+        fetchGroupMessages(groupId);
+        fetchGroupMembers(groupId);
       } else {
         setChatMode("dm");
         fetchMessages(activeChat);
       }
     }
   }, [activeChat]);
+
+  const fetchFriends = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("friendships")
+      .select("*")
+      .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`);
+    if (!data) return;
+
+    const seen = new Set<string>();
+    const enriched: Friendship[] = [];
+    for (const f of data) {
+      const friendUserId = f.user_id === user.id ? f.friend_id : f.user_id;
+      if (seen.has(friendUserId)) continue;
+      seen.add(friendUserId);
+      const { data: profile } = await supabase.from("profiles").select("user_id, full_name, avatar_url, college").eq("user_id", friendUserId).single();
+      enriched.push({ ...f, profile: profile || undefined } as Friendship);
+    }
+    setFriends(enriched);
+  };
+
+  const fetchRequests = async () => {
+    if (!user) return;
+    const { data: incoming } = await supabase
+      .from("friend_requests")
+      .select("*")
+      .eq("receiver_id", user.id)
+      .eq("status", "pending");
+
+    if (incoming) {
+      const enriched = await Promise.all(
+        incoming.map(async (r: any) => {
+          const { data: profile } = await supabase.from("profiles").select("user_id, full_name, avatar_url, college").eq("user_id", r.sender_id).single();
+          return { ...r, profile: profile || undefined } as FriendRequest;
+        })
+      );
+      setIncomingRequests(enriched);
+    }
+
+    const { data: sent } = await supabase
+      .from("friend_requests")
+      .select("*")
+      .eq("sender_id", user.id)
+      .eq("status", "pending");
+    if (sent) setSentRequests(sent as FriendRequest[]);
+  };
 
   const fetchConversations = async () => {
     if (!user) return;
@@ -175,7 +279,6 @@ const Messages = () => {
         unread,
       });
     }
-    setConversations(convs);
 
     // Fetch group conversations
     const { data: memberData } = await supabase.from("group_members").select("group_id").eq("user_id", user.id);
@@ -208,7 +311,29 @@ const Messages = () => {
       .select("*")
       .eq("group_id", groupId)
       .order("created_at", { ascending: true });
-    if (data) setGroupMessages(data);
+    if (data) {
+      setGroupMessages(data);
+      // Fetch sender names
+      const senderIds = [...new Set(data.map((m: any) => m.sender_id))];
+      const names: Record<string, string> = {};
+      for (const sid of senderIds) {
+        if (sid === user?.id) { names[sid] = "You"; continue; }
+        const { data: p } = await supabase.from("profiles").select("full_name").eq("user_id", sid).single();
+        names[sid] = p?.full_name || "Anonymous";
+      }
+      setSenderNames(names);
+    }
+  };
+
+  const fetchGroupMembers = async (groupId: string) => {
+    const { data } = await supabase.from("group_members").select("user_id, role").eq("group_id", groupId);
+    if (!data) return;
+    const profiles: Profile[] = [];
+    for (const m of data) {
+      const { data: p } = await supabase.from("profiles").select("user_id, full_name, avatar_url, college").eq("user_id", m.user_id).single();
+      if (p) profiles.push(p as Profile);
+    }
+    setGroupMembers(profiles);
   };
 
   const fetchMessages = async (otherUserId: string) => {
@@ -219,10 +344,84 @@ const Messages = () => {
       .or(`and(sender_id.eq.${user.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${user.id})`)
       .order("created_at", { ascending: true });
     if (data) setMessages(data as Message[]);
-
     await supabase.from("messages").update({ read: true }).eq("receiver_id", user.id).eq("sender_id", otherUserId).eq("read", false);
   };
 
+  // Friends actions
+  const handleSearch = async () => {
+    if (!searchQuery.trim() || !user) return;
+    setSearching(true);
+    const { data } = await supabase
+      .from("profiles")
+      .select("user_id, full_name, avatar_url, college")
+      .neq("user_id", user.id)
+      .ilike("full_name", `%${searchQuery}%`)
+      .limit(20);
+    setSearchResults((data as Profile[]) || []);
+    setSearching(false);
+  };
+
+  const sendFriendRequest = async (receiverId: string) => {
+    if (!user || receiverId === user.id) return;
+    const { error } = await supabase.from("friend_requests").insert({
+      sender_id: user.id,
+      receiver_id: receiverId,
+    });
+    if (error) {
+      if (error.code === "23505") {
+        toast({ title: "Already sent", description: "Friend request already exists." });
+      } else {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+      }
+    } else {
+      toast({ title: "Request sent! 🎉" });
+      fetchRequests();
+    }
+  };
+
+  const acceptRequest = async (requestId: string, senderId: string) => {
+    if (!user) return;
+    await supabase.from("friend_requests").update({ status: "accepted" }).eq("id", requestId);
+    await supabase.from("friendships").insert({ user_id: user.id, friend_id: senderId });
+    await supabase.from("friendships").insert({ user_id: senderId, friend_id: user.id });
+    toast({ title: "Friend added! 🤝" });
+    fetchFriends();
+    fetchRequests();
+  };
+
+  const rejectRequest = async (requestId: string) => {
+    await supabase.from("friend_requests").update({ status: "rejected" }).eq("id", requestId);
+    toast({ title: "Request declined" });
+    fetchRequests();
+  };
+
+  const removeFriend = async (friendUserId: string) => {
+    if (!user) return;
+    await supabase.from("friendships").delete().or(`and(user_id.eq.${user.id},friend_id.eq.${friendUserId}),and(user_id.eq.${friendUserId},friend_id.eq.${user.id})`);
+    toast({ title: "Friend removed" });
+    fetchFriends();
+  };
+
+  const messageFriend = (friendUserId: string) => {
+    setActiveChat(friendUserId);
+    setSidebarTab("chats");
+    setShowSidebar(false);
+  };
+
+  const leaveGroup = async () => {
+    if (!user || !activeChat?.startsWith("group:")) return;
+    const groupId = activeChat.replace("group:", "");
+    await supabase.from("group_members").delete().eq("group_id", groupId).eq("user_id", user.id);
+    toast({ title: "Left group" });
+    setActiveChat(null);
+    setGroupInfoOpen(false);
+    fetchConversations();
+  };
+
+  const isFriend = (userId: string) => friends.some(f => f.profile?.user_id === userId);
+  const hasSentRequest = (userId: string) => sentRequests.some(r => r.receiver_id === userId);
+
+  // Typing
   const handleTyping = useCallback(() => {
     if (!user || !activeChat) return;
     supabase.channel("presence-chat").send({
@@ -234,10 +433,7 @@ const Messages = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNewMsg(e.target.value);
-    if (!typing) {
-      setTyping(true);
-      handleTyping();
-    }
+    if (!typing) { setTyping(true); handleTyping(); }
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => setTyping(false), 1500);
   };
@@ -248,10 +444,7 @@ const Messages = () => {
     const preview: { file: File; previewUrl?: string; type: string } = { file, type };
     if (type === "image") {
       const reader = new FileReader();
-      reader.onload = () => {
-        preview.previewUrl = reader.result as string;
-        setAttachmentPreview(preview);
-      };
+      reader.onload = () => { preview.previewUrl = reader.result as string; setAttachmentPreview(preview); };
       reader.readAsDataURL(file);
     } else {
       setAttachmentPreview(preview);
@@ -264,7 +457,6 @@ const Messages = () => {
   const handleSend = async () => {
     if ((!newMsg.trim() && !attachmentPreview) || !user || !activeChat) return;
 
-    // Group message
     if (activeChat.startsWith("group:")) {
       const groupId = activeChat.replace("group:", "");
       let attachmentUrl: string | null = null;
@@ -310,7 +502,6 @@ const Messages = () => {
       const ext = file.name.split(".").pop();
       const bucket = attachmentPreview.type === "image" ? "resource-images" : "resource-files";
       const filePath = `chat/${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
-      
       const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file);
       if (!uploadError) {
         const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(filePath);
@@ -340,9 +531,7 @@ const Messages = () => {
 
   const renderTicks = (m: Message) => {
     if (m.sender_id !== user?.id) return null;
-    if (m.read) {
-      return <CheckCheck className="h-3.5 w-3.5 text-blue-400 inline-block ml-1" />;
-    }
+    if (m.read) return <CheckCheck className="h-3.5 w-3.5 text-blue-400 inline-block ml-1" />;
     return <Check className="h-3.5 w-3.5 text-white/60 inline-block ml-1" />;
   };
 
@@ -376,219 +565,390 @@ const Messages = () => {
     );
   };
 
+  const Avatar = ({ url, name, size = "h-10 w-10" }: { url: string | null; name: string | null; size?: string }) => (
+    url ? (
+      <img src={url} alt="" className={`${size} rounded-full object-cover`} />
+    ) : (
+      <div className={`${size} rounded-full bg-gradient-primary flex items-center justify-center shrink-0`}>
+        <span className="text-white font-bold text-sm">{(name || "?")[0].toUpperCase()}</span>
+      </div>
+    )
+  );
+
+  // Sidebar tabs content
+  const renderSidebarContent = () => {
+    if (sidebarTab === "chats") {
+      return (
+        <div className="min-h-0 overflow-y-auto">
+          {conversations.length === 0 ? (
+            <div className="p-6 text-center text-muted-foreground text-sm">
+              No conversations yet. Add friends to start chatting!
+            </div>
+          ) : (
+            conversations.map((c) => (
+              <button
+                key={c.userId}
+                className={`w-full p-3 text-left flex items-center gap-3 hover:bg-muted/50 transition-colors ${activeChat === c.userId ? "bg-muted/50" : ""}`}
+                onClick={() => { setActiveChat(c.userId); setShowSidebar(false); }}
+              >
+                <div className="relative">
+                  {c.isGroup ? (
+                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shrink-0">
+                      <Users className="h-5 w-5 text-white" />
+                    </div>
+                  ) : (
+                    <Avatar url={c.avatarUrl} name={c.name} />
+                  )}
+                  {!c.isGroup && <Circle className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 text-primary fill-primary" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-sm truncate">{c.name}{c.isGroup ? " 👥" : ""}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">{c.lastTime}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate">{c.lastMessage}</p>
+                </div>
+                {c.unread > 0 && (
+                  <span className="h-5 w-5 rounded-full bg-gradient-primary text-white text-xs flex items-center justify-center shrink-0">
+                    {c.unread}
+                  </span>
+                )}
+              </button>
+            ))
+          )}
+        </div>
+      );
+    }
+
+    if (sidebarTab === "friends") {
+      return (
+        <div className="min-h-0 overflow-y-auto p-2 space-y-1">
+          {friends.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              <Users className="h-8 w-8 mx-auto mb-2 opacity-40" />
+              <p>No friends yet</p>
+            </div>
+          ) : (
+            friends.map((f) => (
+              <div key={f.id} className="flex items-center gap-2 p-2 rounded-xl hover:bg-muted/50">
+                <Avatar url={f.profile?.avatar_url || null} name={f.profile?.full_name || null} size="h-9 w-9" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm truncate">{f.profile?.full_name || "Anonymous"}</p>
+                  {f.profile?.college && <p className="text-xs text-muted-foreground truncate">{f.profile.college}</p>}
+                </div>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => messageFriend(f.profile?.user_id || "")}>
+                  <MessageSquare className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive" onClick={() => removeFriend(f.profile?.user_id || "")}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))
+          )}
+        </div>
+      );
+    }
+
+    if (sidebarTab === "requests") {
+      return (
+        <div className="min-h-0 overflow-y-auto p-2 space-y-1">
+          {incomingRequests.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">No pending requests</p>
+          ) : (
+            incomingRequests.map((r) => (
+              <div key={r.id} className="flex items-center gap-2 p-2 rounded-xl hover:bg-muted/50">
+                <Avatar url={r.profile?.avatar_url || null} name={r.profile?.full_name || null} size="h-9 w-9" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm truncate">{r.profile?.full_name || "Anonymous"}</p>
+                  <p className="text-xs text-muted-foreground">Wants to connect</p>
+                </div>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-primary" onClick={() => acceptRequest(r.id, r.sender_id)}>
+                  <UserCheck className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive" onClick={() => rejectRequest(r.id)}>
+                  <UserX className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))
+          )}
+        </div>
+      );
+    }
+
+    // find tab
+    return (
+      <div className="min-h-0 overflow-y-auto p-2 space-y-2">
+        <div className="flex gap-1">
+          <Input
+            placeholder="Search by name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+            className="rounded-full text-sm h-8"
+          />
+          <Button onClick={handleSearch} size="sm" className="bg-gradient-primary text-white rounded-full h-8 w-8 p-0" disabled={searching}>
+            <Search className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+        {searchResults.map((p) => (
+          <div key={p.user_id} className="flex items-center gap-2 p-2 rounded-xl hover:bg-muted/50">
+            <Avatar url={p.avatar_url} name={p.full_name} size="h-9 w-9" />
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-sm truncate">{p.full_name || "Anonymous"}</p>
+              {p.college && <p className="text-xs text-muted-foreground truncate">{p.college}</p>}
+            </div>
+            {isFriend(p.user_id) ? (
+              <Badge variant="outline" className="text-xs">Friends ✓</Badge>
+            ) : hasSentRequest(p.user_id) ? (
+              <Badge variant="outline" className="text-xs">Pending</Badge>
+            ) : (
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => sendFriendRequest(p.user_id)}>
+                <UserPlus className="h-3 w-3" /> Add
+              </Button>
+            )}
+          </div>
+        ))}
+        {searchResults.length === 0 && searchQuery && !searching && (
+          <p className="text-center text-xs text-muted-foreground py-4">No users found</p>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen pt-16 px-4 pb-8">
       <div className="container mx-auto max-w-5xl pt-4">
-        <motion.h1
-          className="font-heading text-3xl font-bold mb-6"
-          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-        >
-          <span className="text-gradient">Messages</span>
-        </motion.h1>
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <motion.h1
+            className="font-heading text-3xl font-bold"
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+          >
+            <span className="text-gradient">Messages</span>
+          </motion.h1>
           <CreateGroupDialog onGroupCreated={fetchConversations} />
-          <Link to="/friends">
-            <Button size="sm" variant="outline" className="gap-1.5 rounded-full">
-              <Users className="h-4 w-4" /> Friends
-            </Button>
-          </Link>
         </div>
 
         <div className="bg-card rounded-2xl overflow-hidden grid md:grid-cols-[280px_1fr] h-[70vh] min-h-0 shadow-soft border border-border/50">
           {/* Sidebar */}
-          <div className={`border-r border-border/50 min-h-0 overflow-y-auto overflow-x-hidden ${activeChat && !showSidebar ? "hidden md:block" : ""}`}>
-            {conversations.length === 0 ? (
-              <div className="p-6 text-center text-muted-foreground text-sm">
-                No conversations yet. Start chatting from a resource page!
-              </div>
-            ) : (
-              conversations.map((c) => (
+          <div className={`border-r border-border/50 flex flex-col min-h-0 ${activeChat && !showSidebar ? "hidden md:flex" : ""}`}>
+            {/* Sidebar tabs */}
+            <div className="flex border-b border-border/50 shrink-0">
+              {([
+                { key: "chats" as const, icon: MessageSquare, label: "Chats" },
+                { key: "friends" as const, icon: Users, label: "Friends", count: friends.length },
+                { key: "requests" as const, icon: UserCheck, label: "Requests", count: incomingRequests.length },
+                { key: "find" as const, icon: Search, label: "Find" },
+              ]).map((t) => (
                 <button
-                  key={c.userId}
-                  className={`w-full p-4 text-left flex items-center gap-3 hover:bg-muted/50 transition-colors ${activeChat === c.userId ? "bg-muted/50" : ""}`}
-                  onClick={() => { setActiveChat(c.userId); setShowSidebar(false); }}
+                  key={t.key}
+                  onClick={() => setSidebarTab(t.key)}
+                  className={`flex-1 py-2.5 text-xs font-medium flex flex-col items-center gap-0.5 transition-colors relative ${
+                    sidebarTab === t.key ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                  }`}
                 >
                   <div className="relative">
-                    {c.isGroup ? (
-                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shrink-0">
-                        <Users className="h-5 w-5 text-white" />
-                      </div>
-                    ) : c.avatarUrl ? (
-                      <img src={c.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
-                    ) : (
-                      <div className="h-10 w-10 rounded-full bg-gradient-primary flex items-center justify-center shrink-0">
-                        <User className="h-5 w-5 text-white" />
-                      </div>
+                    <t.icon className="h-4 w-4" />
+                    {t.count !== undefined && t.count > 0 && (
+                      <span className="absolute -top-1.5 -right-2.5 h-4 w-4 rounded-full bg-gradient-primary text-white text-[10px] flex items-center justify-center">
+                        {t.count}
+                      </span>
                     )}
-                    {!c.isGroup && <Circle className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 text-primary fill-primary" />}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-sm">{c.name}{c.isGroup && " 👥"}</span>
-                      <span className="text-xs text-muted-foreground">{c.lastTime}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground truncate">{c.lastMessage}</p>
-                  </div>
-                  {c.unread > 0 && (
-                    <span className="h-5 w-5 rounded-full bg-gradient-primary text-white text-xs flex items-center justify-center">
-                      {c.unread}
-                    </span>
+                  {t.label}
+                  {sidebarTab === t.key && (
+                    <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-primary rounded-full" />
                   )}
                 </button>
-              ))
-            )}
+              ))}
+            </div>
+
+            {/* Sidebar content */}
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {renderSidebarContent()}
+            </div>
           </div>
 
           {/* Chat area */}
-            <div className="flex min-h-0 flex-col">
-            {activeChat && (
-              <div className="px-4 py-3 border-b border-border/50 flex items-center gap-3">
-                <button className="md:hidden text-muted-foreground mr-1" onClick={() => setShowSidebar(true)}>
-                  ←
-                </button>
-                <div className="relative">
-                  {isGroupChat ? (
-                    <div className="h-8 w-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                      <Users className="h-4 w-4 text-white" />
-                    </div>
-                  ) : activeAvatar ? (
-                    <img src={activeAvatar} alt="" className="h-8 w-8 rounded-full object-cover" />
-                  ) : (
-                    <div className="h-8 w-8 rounded-full bg-gradient-primary flex items-center justify-center">
-                      <User className="h-4 w-4 text-white" />
-                    </div>
-                  )}
-                  {!isGroupChat && <Circle className="absolute -bottom-0.5 -right-0.5 h-3 w-3 text-primary fill-primary" />}
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">{activeName}{isGroupChat ? " 👥" : ""}</p>
-                  {otherTyping ? (
-                    <p className="text-xs text-primary animate-pulse">typing...</p>
-                  ) : isGroupChat ? (
-                    <p className="text-xs text-muted-foreground">Group chat</p>
-                  ) : (
-                    <p className="text-xs text-primary">online</p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Messages - flex-col-reverse ensures scroll starts at bottom */}
-              <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-4">
-                <div className="flex min-h-full flex-col justify-end">
-                  <div className="space-y-3">
-                {chatMode === "dm" ? (
-                  messages.map((m) => (
-                    <div key={m.id} className={`flex ${m.sender_id === user?.id ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[78%] overflow-hidden rounded-2xl px-4 py-2 text-sm shadow-sm ${
-                        m.sender_id === user?.id
-                          ? "bg-gradient-primary text-white"
-                          : "bg-muted text-foreground"
-                      }`}>
-                        {renderMessageContent(m)}
+          <div className="flex min-h-0 flex-col">
+            {activeChat ? (
+              <>
+                <div className="px-4 py-3 border-b border-border/50 flex items-center gap-3">
+                  <button className="md:hidden text-muted-foreground" onClick={() => setShowSidebar(true)}>
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <div className="relative">
+                    {isGroupChat ? (
+                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                        <Users className="h-4 w-4 text-white" />
                       </div>
-                    </div>
-                  ))
-                ) : (
-                  groupMessages.map((m) => (
-                    <div key={m.id} className={`flex ${m.sender_id === user?.id ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[78%] overflow-hidden rounded-2xl px-4 py-2 text-sm shadow-sm ${
-                        m.sender_id === user?.id
-                          ? "bg-gradient-primary text-white"
-                          : "bg-muted text-foreground"
-                      }`}>
-                        {m.sender_id !== user?.id && (
-                          <p className="text-xs font-semibold mb-1 opacity-70">Member</p>
-                        )}
-                        {m.attachment_type === "image" && m.attachment_url && (
-                          <a href={m.attachment_url} target="_blank" rel="noopener noreferrer">
-                            <img src={m.attachment_url} alt="Shared" className="rounded-xl max-w-[240px] max-h-[200px] object-cover mb-1" />
-                          </a>
-                        )}
-                        {m.attachment_type === "file" && m.attachment_url && (
-                          <a href={m.attachment_url} target="_blank" rel="noopener noreferrer"
-                            className={`flex items-center gap-2 rounded-xl px-3 py-2 mb-1 ${m.sender_id === user?.id ? "bg-white/20" : "bg-muted"}`}>
-                            <FileText className="h-4 w-4 shrink-0" />
-                            <span className="text-xs truncate max-w-[150px]">{m.attachment_name || "File"}</span>
-                            <Download className="h-4 w-4 shrink-0" />
-                          </a>
-                        )}
-                        {m.content && !(m.attachment_type && (m.content === "📷 Photo" || m.content.startsWith("📎"))) && (
-                          <p className="break-words whitespace-pre-wrap leading-relaxed">{m.content}</p>
-                        )}
-                        <div className="flex items-center justify-end mt-1">
-                          <span className="text-xs opacity-60">
-                            {new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          </span>
+                    ) : activeAvatar ? (
+                      <img src={activeAvatar} alt="" className="h-8 w-8 rounded-full object-cover" />
+                    ) : (
+                      <div className="h-8 w-8 rounded-full bg-gradient-primary flex items-center justify-center">
+                        <User className="h-4 w-4 text-white" />
+                      </div>
+                    )}
+                    {!isGroupChat && <Circle className="absolute -bottom-0.5 -right-0.5 h-3 w-3 text-primary fill-primary" />}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-sm">{activeName}{isGroupChat ? " 👥" : ""}</p>
+                    {otherTyping ? (
+                      <p className="text-xs text-primary animate-pulse">typing...</p>
+                    ) : isGroupChat ? (
+                      <p className="text-xs text-muted-foreground">{groupMembers.length} members</p>
+                    ) : (
+                      <p className="text-xs text-primary">online</p>
+                    )}
+                  </div>
+                  {isGroupChat && (
+                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setGroupInfoOpen(true)}>
+                      <Settings className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+
+                {/* Messages */}
+                <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-4">
+                  <div className="flex min-h-full flex-col justify-end">
+                    <div className="space-y-3">
+                      {chatMode === "dm" ? (
+                        messages.map((m) => (
+                          <div key={m.id} className={`flex ${m.sender_id === user?.id ? "justify-end" : "justify-start"}`}>
+                            <div className={`max-w-[78%] overflow-hidden rounded-2xl px-4 py-2 text-sm shadow-sm ${
+                              m.sender_id === user?.id ? "bg-gradient-primary text-white" : "bg-muted text-foreground"
+                            }`}>
+                              {renderMessageContent(m)}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        groupMessages.map((m) => (
+                          <div key={m.id} className={`flex ${m.sender_id === user?.id ? "justify-end" : "justify-start"}`}>
+                            <div className={`max-w-[78%] overflow-hidden rounded-2xl px-4 py-2 text-sm shadow-sm ${
+                              m.sender_id === user?.id ? "bg-gradient-primary text-white" : "bg-muted text-foreground"
+                            }`}>
+                              {m.sender_id !== user?.id && (
+                                <p className="text-xs font-semibold mb-1 text-primary">{senderNames[m.sender_id] || "Loading..."}</p>
+                              )}
+                              {m.attachment_type === "image" && m.attachment_url && (
+                                <a href={m.attachment_url} target="_blank" rel="noopener noreferrer">
+                                  <img src={m.attachment_url} alt="Shared" className="rounded-xl max-w-[240px] max-h-[200px] object-cover mb-1" />
+                                </a>
+                              )}
+                              {m.attachment_type === "file" && m.attachment_url && (
+                                <a href={m.attachment_url} target="_blank" rel="noopener noreferrer"
+                                  className={`flex items-center gap-2 rounded-xl px-3 py-2 mb-1 ${m.sender_id === user?.id ? "bg-white/20" : "bg-muted"}`}>
+                                  <FileText className="h-4 w-4 shrink-0" />
+                                  <span className="text-xs truncate max-w-[150px]">{m.attachment_name || "File"}</span>
+                                  <Download className="h-4 w-4 shrink-0" />
+                                </a>
+                              )}
+                              {m.content && !(m.attachment_type && (m.content === "📷 Photo" || m.content.startsWith("📎"))) && (
+                                <p className="break-words whitespace-pre-wrap leading-relaxed">{m.content}</p>
+                              )}
+                              <div className="flex items-center justify-end mt-1">
+                                <span className="text-xs opacity-60">
+                                  {new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                      {otherTyping && (
+                        <div className="flex justify-start">
+                          <div className="bg-muted rounded-2xl px-4 py-2 text-sm text-muted-foreground">
+                            <span className="flex gap-1">
+                              <span className="animate-bounce" style={{ animationDelay: "0ms" }}>•</span>
+                              <span className="animate-bounce" style={{ animationDelay: "150ms" }}>•</span>
+                              <span className="animate-bounce" style={{ animationDelay: "300ms" }}>•</span>
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-                {otherTyping && (
-                  <div className="flex justify-start">
-                    <div className="bg-muted rounded-2xl px-4 py-2 text-sm text-muted-foreground">
-                      <span className="flex gap-1">
-                        <span className="animate-bounce" style={{ animationDelay: "0ms" }}>•</span>
-                        <span className="animate-bounce" style={{ animationDelay: "150ms" }}>•</span>
-                        <span className="animate-bounce" style={{ animationDelay: "300ms" }}>•</span>
-                      </span>
+                      )}
                     </div>
                   </div>
-                )}
-                  </div>
-              </div>
-            </div>
-
-            {activeChat && (
-              <div className="border-t border-border/50">
-                {attachmentPreview && (
-                  <div className="px-4 pt-3 flex items-center gap-3">
-                    {attachmentPreview.type === "image" && attachmentPreview.previewUrl ? (
-                      <img src={attachmentPreview.previewUrl} alt="" className="h-16 w-16 rounded-xl object-cover" />
-                    ) : (
-                      <div className="flex items-center gap-2 bg-muted rounded-xl px-3 py-2">
-                        <FileText className="h-4 w-4 text-primary" />
-                        <span className="text-xs truncate max-w-[200px]">{attachmentPreview.file.name}</span>
-                      </div>
-                    )}
-                    <button onClick={clearAttachment} className="text-muted-foreground hover:text-destructive">
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                )}
-
-                <div className="p-4 flex gap-2 items-center">
-                  <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileSelect(e, "image")} />
-                  <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.xlsx,.xls,.zip,.rar" className="hidden" onChange={(e) => handleFileSelect(e, "file")} />
-
-                  <button onClick={() => imageInputRef.current?.click()} className="text-muted-foreground hover:text-primary transition-colors p-1.5 rounded-full hover:bg-muted">
-                    <ImageIcon className="h-5 w-5" />
-                  </button>
-                  <button onClick={() => fileInputRef.current?.click()} className="text-muted-foreground hover:text-primary transition-colors p-1.5 rounded-full hover:bg-muted">
-                    <Paperclip className="h-5 w-5" />
-                  </button>
-
-                  <Input
-                    placeholder="Type a message..."
-                    value={newMsg}
-                    onChange={handleInputChange}
-                    onKeyDown={(e) => e.key === "Enter" && !uploading && handleSend()}
-                    className="min-w-0 flex-1 rounded-full"
-                  />
-                  <Button onClick={handleSend} className="bg-gradient-primary rounded-full text-white" disabled={uploading}>
-                    {uploading ? (
-                      <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
-                  </Button>
                 </div>
+
+                {/* Input */}
+                <div className="border-t border-border/50">
+                  {attachmentPreview && (
+                    <div className="px-4 pt-3 flex items-center gap-3">
+                      {attachmentPreview.type === "image" && attachmentPreview.previewUrl ? (
+                        <img src={attachmentPreview.previewUrl} alt="" className="h-16 w-16 rounded-xl object-cover" />
+                      ) : (
+                        <div className="flex items-center gap-2 bg-muted rounded-xl px-3 py-2">
+                          <FileText className="h-4 w-4 text-primary" />
+                          <span className="text-xs truncate max-w-[200px]">{attachmentPreview.file.name}</span>
+                        </div>
+                      )}
+                      <button onClick={clearAttachment} className="text-muted-foreground hover:text-destructive">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                  <div className="p-4 flex gap-2 items-center">
+                    <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileSelect(e, "image")} />
+                    <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.xlsx,.xls,.zip,.rar" className="hidden" onChange={(e) => handleFileSelect(e, "file")} />
+                    <button onClick={() => imageInputRef.current?.click()} className="text-muted-foreground hover:text-primary transition-colors p-1.5 rounded-full hover:bg-muted">
+                      <ImageIcon className="h-5 w-5" />
+                    </button>
+                    <button onClick={() => fileInputRef.current?.click()} className="text-muted-foreground hover:text-primary transition-colors p-1.5 rounded-full hover:bg-muted">
+                      <Paperclip className="h-5 w-5" />
+                    </button>
+                    <Input
+                      placeholder="Type a message..."
+                      value={newMsg}
+                      onChange={handleInputChange}
+                      onKeyDown={(e) => e.key === "Enter" && !uploading && handleSend()}
+                      className="min-w-0 flex-1 rounded-full"
+                    />
+                    <Button onClick={handleSend} className="bg-gradient-primary rounded-full text-white" disabled={uploading}>
+                      {uploading ? (
+                        <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+                Select a conversation or find friends to start chatting
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Group Info Dialog */}
+      <Dialog open={groupInfoOpen} onOpenChange={setGroupInfoOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" /> Group Info
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <h4 className="font-medium text-sm mb-2">Members ({groupMembers.length})</h4>
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {groupMembers.map((m) => (
+                  <div key={m.user_id} className="flex items-center gap-3 p-2 rounded-xl">
+                    <Avatar url={m.avatar_url} name={m.full_name} size="h-8 w-8" />
+                    <span className="text-sm font-medium flex-1">{m.full_name || "Anonymous"}</span>
+                    {m.user_id === user?.id && <Badge variant="outline" className="text-xs">You</Badge>}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <Button variant="destructive" className="w-full gap-2" onClick={leaveGroup}>
+              <LeaveIcon className="h-4 w-4" /> Leave Group
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
