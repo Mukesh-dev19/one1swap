@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Search, Upload, MessageSquare, LayoutDashboard, User, BookOpen, Sparkles } from "lucide-react";
+import { Search, Upload, MessageSquare, LayoutDashboard, User, BookOpen, Sparkles, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import logo from "@/assets/logo.jpeg";
 
@@ -37,6 +37,13 @@ const quickActions = [
     title: "Dashboard",
     desc: "Track your uploads, saves & activity",
     gradient: "from-blue-500 to-purple-500",
+  },
+  {
+    to: "/friends",
+    icon: Users,
+    title: "Friends",
+    desc: "Find friends, send requests & create groups",
+    gradient: "from-green-400 to-teal-500",
   },
 ];
 
