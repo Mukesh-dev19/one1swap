@@ -20,9 +20,7 @@ const Navbar = () => {
     ? [
         { to: "/home", label: "Home", icon: Home },
         { to: "/resources", label: "Resources", icon: BookOpen },
-        { to: "/upload", label: "Upload", icon: Plus },
         { to: "/messages", label: "Messages", icon: MessageSquare },
-        { to: "/friends", label: "Friends", icon: Users },
         { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       ]
     : [{ to: "/", label: "Home", icon: Home }];
