@@ -19,7 +19,7 @@ import Register from "./pages/Register";
 import Profile from "./pages/Profile";
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
-import Friends from "./pages/Friends";
+// Friends is now integrated into Messages page
 
 const queryClient = new QueryClient();
 
