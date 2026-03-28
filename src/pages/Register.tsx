@@ -18,11 +18,31 @@ const Register = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [nameError, setNameError] = useState("");
   const navigate = useNavigate();
 
   if (!authLoading && user) {
     return <Navigate to="/home" replace />;
   }
+
+  const checkNameAvailability = async (fullName: string): Promise<boolean> => {
+    if (!fullName.trim()) return false;
+    const { data } = await supabase
+      .from("profiles")
+      .select("id")
+      .ilike("full_name", fullName.trim())
+      .limit(1);
+    return !data || data.length === 0;
+  };
+
+  const handleNameBlur = async () => {
+    if (!name.trim()) {
+      setNameError("");
+      return;
+    }
+    const available = await checkNameAvailability(name);
+    setNameError(available ? "" : "This name is already taken. Please choose a different one.");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,12 +54,23 @@ const Register = () => {
       toast({ title: "Weak password", description: "Password must be at least 6 characters.", variant: "destructive" });
       return;
     }
+
     setLoading(true);
+
+    // Check name uniqueness
+    const nameAvailable = await checkNameAvailability(name);
+    if (!nameAvailable) {
+      setLoading(false);
+      setNameError("This name is already taken. Please choose a different one.");
+      toast({ title: "Name taken", description: "Someone already has this display name.", variant: "destructive" });
+      return;
+    }
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: name },
+        data: { full_name: name.trim() },
         emailRedirectTo: window.location.origin,
       },
     });
@@ -73,11 +104,19 @@ const Register = () => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <Label htmlFor="name">Full Name</Label>
+            <Label htmlFor="name">Display Name</Label>
             <div className="relative mt-1">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input id="name" placeholder="Your full name" className="pl-10" value={name} onChange={(e) => setName(e.target.value)} />
+              <Input
+                id="name"
+                placeholder="Choose a unique name"
+                className={`pl-10 ${nameError ? "border-destructive" : ""}`}
+                value={name}
+                onChange={(e) => { setName(e.target.value); setNameError(""); }}
+                onBlur={handleNameBlur}
+              />
             </div>
+            {nameError && <p className="text-xs text-destructive mt-1">{nameError}</p>}
           </div>
           <div>
             <Label htmlFor="email">College Email</Label>
@@ -97,7 +136,7 @@ const Register = () => {
             </div>
           </div>
 
-          <Button type="submit" className="w-full bg-gradient-primary font-semibold text-white" disabled={loading}>
+          <Button type="submit" className="w-full bg-gradient-primary font-semibold text-white" disabled={loading || !!nameError}>
             {loading ? "Creating account..." : "Create Account"}
           </Button>
 
