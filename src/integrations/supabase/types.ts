@@ -133,6 +133,7 @@ export type Database = {
           created_at: string
           group_id: string
           id: string
+          reply_to_id: string | null
           sender_id: string
         }
         Insert: {
@@ -143,6 +144,7 @@ export type Database = {
           created_at?: string
           group_id: string
           id?: string
+          reply_to_id?: string | null
           sender_id: string
         }
         Update: {
@@ -153,6 +155,7 @@ export type Database = {
           created_at?: string
           group_id?: string
           id?: string
+          reply_to_id?: string | null
           sender_id?: string
         }
         Relationships: [
@@ -163,7 +166,41 @@ export type Database = {
             referencedRelation: "group_chats"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "group_messages_reply_to_id_fkey"
+            columns: ["reply_to_id"]
+            isOneToOne: false
+            referencedRelation: "group_messages"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      message_reactions: {
+        Row: {
+          created_at: string
+          emoji: string
+          id: string
+          message_id: string
+          message_type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          emoji: string
+          id?: string
+          message_id: string
+          message_type?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          emoji?: string
+          id?: string
+          message_id?: string
+          message_type?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       messages: {
         Row: {
@@ -175,6 +212,7 @@ export type Database = {
           id: string
           read: boolean | null
           receiver_id: string
+          reply_to_id: string | null
           sender_id: string
         }
         Insert: {
@@ -186,6 +224,7 @@ export type Database = {
           id?: string
           read?: boolean | null
           receiver_id: string
+          reply_to_id?: string | null
           sender_id: string
         }
         Update: {
@@ -197,9 +236,18 @@ export type Database = {
           id?: string
           read?: boolean | null
           receiver_id?: string
+          reply_to_id?: string | null
           sender_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "messages_reply_to_id_fkey"
+            columns: ["reply_to_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
