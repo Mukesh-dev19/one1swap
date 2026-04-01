@@ -217,15 +217,25 @@ const ResourceDetail = () => {
             {resource.files && resource.files.length > 0 && (
               <div className="space-y-2">
                 <p className="text-sm font-semibold">📎 Attached Files</p>
-                {resource.files.map((fileUrl, i) => {
-                  const fileName = fileUrl.split("/").pop() || `File ${i + 1}`;
+                {resource.files.map((filePath, i) => {
+                  const fileName = filePath.split("/").pop() || `File ${i + 1}`;
+                  const isFullUrl = filePath.startsWith("http");
                   return (
-                    <a key={i} href={fileUrl} target="_blank" rel="noopener noreferrer"
-                      className="flex items-center gap-2 bg-muted/50 rounded-xl px-4 py-2 hover:bg-muted transition-colors">
+                    <button key={i}
+                      onClick={async () => {
+                        if (isFullUrl) {
+                          window.open(filePath, "_blank");
+                        } else {
+                          const { data, error } = await supabase.storage.from("resource-files").createSignedUrl(filePath, 300);
+                          if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+                          else toast({ title: "Error", description: "Could not generate download link", variant: "destructive" });
+                        }
+                      }}
+                      className="flex items-center gap-2 bg-muted/50 rounded-xl px-4 py-2 hover:bg-muted transition-colors w-full text-left">
                       <FileText className="h-4 w-4 text-primary" />
                       <span className="text-sm truncate flex-1">{fileName}</span>
                       <Download className="h-4 w-4 text-muted-foreground" />
-                    </a>
+                    </button>
                   );
                 })}
               </div>
