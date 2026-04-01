@@ -80,8 +80,8 @@ const UploadResource = () => {
       const filePath = `${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
       const { error: uploadError } = await supabase.storage.from("resource-files").upload(filePath, file);
       if (!uploadError) {
-        const { data: urlData } = supabase.storage.from("resource-files").getPublicUrl(filePath);
-        fileUrls.push(urlData.publicUrl);
+        // Store the file path, not public URL (bucket is now private)
+        fileUrls.push(filePath);
       }
     }
 
