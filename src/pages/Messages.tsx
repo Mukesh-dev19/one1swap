@@ -512,6 +512,10 @@ const Messages = () => {
     const { error } = await supabase.storage.from(bucket).upload(filePath, file);
     setUploading(false);
     if (error) return { url: null, type: null, name: null };
+    if (bucket === "resource-files") {
+      // Private bucket: store path, generate signed URL on display
+      return { url: filePath, type: attachmentPreview.type, name: file.name };
+    }
     const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(filePath);
     return { url: urlData.publicUrl, type: attachmentPreview.type, name: file.name };
   };
