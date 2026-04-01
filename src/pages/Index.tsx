@@ -1,6 +1,6 @@
 import { Link, Navigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, BookOpen, Recycle, Users, Zap, Shield, MessageSquare } from "lucide-react";
+import { ArrowRight, BookOpen, Recycle, Users, Zap, Shield, MessageSquare, FlaskConical, FileText, Smartphone, Package, Handshake, Leaf } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import logo from "@/assets/logo.jpeg";
@@ -11,23 +11,24 @@ const fadeUp = {
 };
 
 const categories = [
-  { icon: BookOpen, label: "Books", count: "250+" },
-  { icon: Zap, label: "Electronics", count: "180+" },
-  { icon: Users, label: "Study Groups", count: "90+" },
-  { icon: Recycle, label: "Exchange", count: "320+" },
+  { icon: BookOpen, label: "Books & Study Materials", emoji: "📚" },
+  { icon: Zap, label: "Electronics & Gadgets", emoji: "💻" },
+  { icon: FlaskConical, label: "Lab Equipment & Tools", emoji: "🧪" },
+  { icon: FileText, label: "Notes & Academic Resources", emoji: "📄" },
 ];
 
-const features = [
-  { icon: Shield, title: "Secure Trades", desc: "Verified college students only. Safe exchanges on campus." },
-  { icon: MessageSquare, title: "Real-time Chat", desc: "Message sellers instantly. Negotiate and arrange meetups." },
-  { icon: Recycle, title: "Sustainability", desc: "Reduce waste by sharing resources. Track your impact." },
-  { icon: Zap, title: "Quick Upload", desc: "List your items in seconds with our simple upload form." },
+const values = [
+  { icon: "💸", title: "Save Money", desc: "Save money on expensive academic resources" },
+  { icon: "🔄", title: "Exchange Items", desc: "Exchange items instead of buying new" },
+  { icon: "🤝", title: "Trusted Students", desc: "Connect with trusted students on your campus" },
+  { icon: "🌱", title: "Go Sustainable", desc: "Support a sustainable campus community" },
 ];
 
 const steps = [
-  { num: "01", title: "Create Account", desc: "Sign up with your college email in seconds." },
-  { num: "02", title: "List or Browse", desc: "Upload resources or explore what others are sharing." },
-  { num: "03", title: "Connect & Exchange", desc: "Chat with peers and complete your exchange." },
+  { emoji: "📲", num: "01", title: "Sign Up", desc: "Sign up with your college email in seconds." },
+  { emoji: "📦", num: "02", title: "List or Browse", desc: "Upload resources or explore what others are sharing." },
+  { emoji: "💬", num: "03", title: "Connect", desc: "Chat with students and arrange exchange." },
+  { emoji: "🤝", num: "04", title: "Meet & Exchange", desc: "Meet on campus and complete your exchange offline." },
 ];
 
 const Index = () => {
@@ -50,14 +51,14 @@ const Index = () => {
             className="font-heading text-4xl sm:text-6xl lg:text-7xl font-bold mb-6"
             initial="hidden" animate="visible" variants={fadeUp} custom={1}
           >
-            Share Smarter,{" "}
-            <span className="text-gradient">Save Together</span>
+            Everything a Student Needs —{" "}
+            <span className="text-gradient">In One Place.</span>
           </motion.h1>
           <motion.p
             className="text-muted-foreground text-lg sm:text-xl max-w-2xl mx-auto mb-8"
             initial="hidden" animate="visible" variants={fadeUp} custom={2}
           >
-            The sustainable marketplace for college students to buy, sell, exchange, and share academic resources. All prices in ₹.
+            Buy, sell, and exchange books, electronics, and study essentials within your campus — smart, simple, and sustainable.
           </motion.p>
           <motion.div className="flex flex-wrap gap-3 justify-center" initial="hidden" animate="visible" variants={fadeUp} custom={3}>
             <Link to="/register">
@@ -67,33 +68,14 @@ const Index = () => {
             </Link>
             <Link to="/login">
               <Button size="lg" variant="outline" className="font-semibold text-base px-8">
-                Sign In
+                Explore Marketplace
               </Button>
             </Link>
           </motion.div>
         </div>
       </section>
 
-      {/* Categories */}
-      <section className="py-16 px-4">
-        <div className="container mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {categories.map((cat, i) => (
-              <motion.div
-                key={cat.label}
-                className="bg-card rounded-2xl p-6 text-center shadow-soft hover:shadow-glow transition-all cursor-pointer group border border-border/50"
-                initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={i}
-              >
-                <cat.icon className="h-8 w-8 mx-auto mb-3 text-primary group-hover:scale-110 transition-transform" />
-                <h3 className="font-heading font-semibold">{cat.label}</h3>
-                <p className="text-sm text-muted-foreground">{cat.count} items</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
+      {/* Value Proposition */}
       <section className="py-16 px-4 bg-gradient-glow">
         <div className="container mx-auto">
           <motion.h2
@@ -103,17 +85,39 @@ const Index = () => {
             Why <span className="text-gradient">OneSwap</span>?
           </motion.h2>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {features.map((f, i) => (
+            {values.map((v, i) => (
               <motion.div
-                key={f.title}
-                className="bg-card rounded-2xl p-6 shadow-soft hover:shadow-glow transition-all border border-border/50"
+                key={v.title}
+                className="bg-card rounded-2xl p-6 shadow-soft hover:shadow-glow transition-all border border-border/50 text-center"
                 initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={i}
               >
-                <div className="h-12 w-12 rounded-xl bg-gradient-primary flex items-center justify-center mb-4">
-                  <f.icon className="h-6 w-6 text-white" />
-                </div>
-                <h3 className="font-heading font-semibold mb-2">{f.title}</h3>
-                <p className="text-sm text-muted-foreground">{f.desc}</p>
+                <span className="text-4xl mb-4 block">{v.icon}</span>
+                <h3 className="font-heading font-semibold mb-2">{v.title}</h3>
+                <p className="text-sm text-muted-foreground">{v.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Categories */}
+      <section className="py-16 px-4">
+        <div className="container mx-auto">
+          <motion.h2
+            className="font-heading text-3xl sm:text-4xl font-bold text-center mb-12"
+            initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={0}
+          >
+            What Can You Find on <span className="text-gradient">OneSwap</span>?
+          </motion.h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {categories.map((cat, i) => (
+              <motion.div
+                key={cat.label}
+                className="bg-card rounded-2xl p-6 text-center shadow-soft hover:shadow-glow transition-all cursor-pointer group border border-border/50"
+                initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={i}
+              >
+                <span className="text-4xl mb-3 block">{cat.emoji}</span>
+                <h3 className="font-heading font-semibold text-sm sm:text-base">{cat.label}</h3>
               </motion.div>
             ))}
           </div>
@@ -121,23 +125,25 @@ const Index = () => {
       </section>
 
       {/* How it works */}
-      <section className="py-16 px-4">
+      <section className="py-16 px-4 bg-gradient-glow">
         <div className="container mx-auto">
           <motion.h2
-            className="font-heading text-3xl sm:text-4xl font-bold text-center mb-12"
+            className="font-heading text-3xl sm:text-4xl font-bold text-center mb-4"
             initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={0}
           >
-            How It <span className="text-gradient">Works</span>
+            Simple. Fast. <span className="text-gradient">Student-Friendly.</span>
           </motion.h2>
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+          <p className="text-center text-muted-foreground mb-12">How it works in 4 simple steps</p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">
             {steps.map((s, i) => (
               <motion.div
                 key={s.num}
-                className="text-center"
+                className="bg-card rounded-2xl p-6 text-center shadow-soft border border-border/50"
                 initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={i}
               >
-                <span className="font-heading text-5xl font-bold text-gradient opacity-60">{s.num}</span>
-                <h3 className="font-heading text-xl font-semibold mt-2 mb-2">{s.title}</h3>
+                <span className="text-3xl mb-2 block">{s.emoji}</span>
+                <span className="font-heading text-3xl font-bold text-gradient opacity-60">{s.num}</span>
+                <h3 className="font-heading text-lg font-semibold mt-2 mb-2">{s.title}</h3>
                 <p className="text-sm text-muted-foreground">{s.desc}</p>
               </motion.div>
             ))}

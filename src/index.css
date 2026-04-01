@@ -7,48 +7,48 @@
 @layer base {
   :root {
     --background: 0 0% 98%;
-    --foreground: 240 10% 10%;
+    --foreground: 210 10% 10%;
 
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 10%;
+    --card-foreground: 210 10% 10%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 10%;
+    --popover-foreground: 210 10% 10%;
 
-    --primary: 280 70% 55%;
+    --primary: 142 72% 29%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 240 5% 96%;
-    --secondary-foreground: 240 10% 30%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 210 10% 30%;
 
-    --muted: 240 5% 94%;
-    --muted-foreground: 240 5% 50%;
+    --muted: 220 14% 94%;
+    --muted-foreground: 220 8% 46%;
 
-    --accent: 25 95% 55%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 220 13% 91%;
+    --accent-foreground: 210 10% 15%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 240 5% 90%;
-    --input: 240 5% 90%;
-    --ring: 280 70% 55%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 142 72% 29%;
 
     --radius: 0.875rem;
 
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 240 10% 30%;
-    --sidebar-primary: 280 70% 55%;
+    --sidebar-foreground: 210 10% 30%;
+    --sidebar-primary: 142 72% 29%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 5% 96%;
-    --sidebar-accent-foreground: 240 10% 30%;
-    --sidebar-border: 240 5% 90%;
-    --sidebar-ring: 280 70% 55%;
+    --sidebar-accent: 220 14% 96%;
+    --sidebar-accent-foreground: 210 10% 30%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 142 72% 29%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(280, 70%, 55%), hsl(340, 80%, 55%), hsl(25, 95%, 55%));
-    --gradient-glow: linear-gradient(135deg, hsl(280, 70%, 55%, 0.08), hsl(340, 80%, 55%, 0.08), hsl(25, 95%, 55%, 0.08));
-    --shadow-glow: 0 4px 30px hsl(280, 70%, 55%, 0.12);
-    --shadow-soft: 0 2px 20px hsl(240, 5%, 50%, 0.08);
+    --gradient-primary: linear-gradient(135deg, hsl(142, 72%, 29%), hsl(142, 60%, 40%), hsl(160, 84%, 39%));
+    --gradient-glow: linear-gradient(135deg, hsl(142, 72%, 29%, 0.06), hsl(160, 84%, 39%, 0.06), hsl(142, 60%, 40%, 0.06));
+    --shadow-glow: 0 4px 30px hsl(142, 72%, 29%, 0.15);
+    --shadow-soft: 0 2px 20px hsl(220, 8%, 46%, 0.08);
 
     font-family: 'Inter', sans-serif;
   }
@@ -92,5 +92,13 @@
 
   .glass {
     @apply bg-card/80 backdrop-blur-xl border border-border/50 shadow-soft;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }

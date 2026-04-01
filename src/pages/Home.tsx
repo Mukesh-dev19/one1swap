@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Search, MessageSquare, LayoutDashboard, User, BookOpen, Sparkles } from "lucide-react";
+import { Search, MessageSquare, LayoutDashboard, User, BookOpen, Sparkles, Upload } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import logo from "@/assets/logo.jpeg";
 
@@ -14,22 +14,29 @@ const quickActions = [
     to: "/messages",
     icon: MessageSquare,
     title: "Messages",
-    desc: "Chat, find friends, send requests & create groups",
-    gradient: "from-orange-400 to-yellow-400",
+    desc: "Chat with students, share files & media",
+    gradient: "from-emerald-500 to-green-600",
   },
   {
     to: "/resources",
     icon: Search,
     title: "Browse Resources",
     desc: "Find books, notes, electronics & more",
-    gradient: "from-purple-500 to-pink-500",
+    gradient: "from-teal-500 to-emerald-500",
+  },
+  {
+    to: "/upload",
+    icon: Upload,
+    title: "Upload Resource",
+    desc: "Share your items with the campus",
+    gradient: "from-green-600 to-lime-500",
   },
   {
     to: "/dashboard",
     icon: LayoutDashboard,
     title: "Dashboard",
     desc: "Track your uploads, saves & activity",
-    gradient: "from-blue-500 to-purple-500",
+    gradient: "from-emerald-600 to-teal-500",
   },
 ];
 
@@ -43,13 +50,7 @@ const Home = () => {
       <section className="relative px-4 pt-12 pb-16 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-glow" />
         <div className="container mx-auto max-w-4xl relative z-10">
-          <motion.div
-            className="text-center"
-            initial="hidden"
-            animate="visible"
-            variants={fadeUp}
-            custom={0}
-          >
+          <motion.div className="text-center" initial="hidden" animate="visible" variants={fadeUp} custom={0}>
             <motion.img
               src={logo}
               alt="OneSwap"
@@ -58,34 +59,22 @@ const Home = () => {
               animate={{ scale: 1, opacity: 1 }}
               transition={{ duration: 0.5 }}
             />
-            <motion.h1
-              className="font-heading text-3xl sm:text-5xl font-bold mb-3"
-              variants={fadeUp}
-              custom={1}
-            >
+            <motion.h1 className="font-heading text-3xl sm:text-5xl font-bold mb-3" variants={fadeUp} custom={1}>
               Welcome back,{" "}
               <span className="text-gradient">{displayName}</span>! 👋
             </motion.h1>
-            <motion.p
-              className="text-muted-foreground text-lg max-w-xl mx-auto"
-              variants={fadeUp}
-              custom={2}
-            >
-              Enjoy the OneSwap experience from one place — start with messages, explore resources, upload something new, or open your dashboard.
+            <motion.p className="text-muted-foreground text-lg max-w-xl mx-auto" variants={fadeUp} custom={2}>
+              Everything a student needs — in one place. Start exploring.
             </motion.p>
-            <motion.div
-              className="mt-6 flex flex-wrap items-center justify-center gap-3"
-              variants={fadeUp}
-              custom={3}
-            >
-              <Link to="/messages">
+            <motion.div className="mt-6 flex flex-wrap items-center justify-center gap-3" variants={fadeUp} custom={3}>
+              <Link to="/resources">
                 <button className="bg-gradient-primary rounded-full px-6 py-3 text-sm font-semibold text-white shadow-glow transition-transform hover:scale-[1.02]">
-                  Open Messages
+                  Explore Marketplace
                 </button>
               </Link>
-              <Link to="/resources">
+              <Link to="/profile">
                 <button className="rounded-full border border-border bg-card px-6 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
-                  Explore Resources
+                  My Profile
                 </button>
               </Link>
             </motion.div>
@@ -98,13 +87,7 @@ const Home = () => {
         <div className="container mx-auto max-w-4xl">
           <div className="grid sm:grid-cols-2 gap-4">
             {quickActions.map((action, i) => (
-              <motion.div
-                key={action.to}
-                initial="hidden"
-                animate="visible"
-                variants={fadeUp}
-                custom={i + 4}
-              >
+              <motion.div key={action.to} initial="hidden" animate="visible" variants={fadeUp} custom={i + 4}>
                 <Link to={action.to}>
                   <div className="bg-card rounded-2xl p-6 shadow-soft hover:shadow-glow transition-all border border-border/50 group cursor-pointer h-full">
                     <div className={`h-12 w-12 rounded-xl bg-gradient-to-br ${action.gradient} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
@@ -120,7 +103,7 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Quick links */}
+      {/* CTA */}
       <section className="px-4 pb-16">
         <div className="container mx-auto max-w-4xl">
           <motion.div
@@ -131,10 +114,10 @@ const Home = () => {
           >
             <Sparkles className="h-8 w-8 text-white mx-auto mb-3" />
             <h2 className="font-heading text-2xl font-bold text-white mb-2">
-              Share Smarter, Save Together
+              Share Smarter, Save Together 🌱
             </h2>
             <p className="text-white/80 text-sm mb-4 max-w-md mx-auto">
-              Join the sustainable marketplace for college students. Every exchange makes a difference!
+              Every exchange makes a sustainable difference on your campus!
             </p>
             <div className="flex flex-wrap gap-3 justify-center">
               <Link to="/resources">
