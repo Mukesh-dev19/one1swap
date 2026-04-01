@@ -256,10 +256,12 @@ export type Database = {
           campus: string | null
           college: string | null
           created_at: string
+          department: string | null
           full_name: string | null
           id: string
           updated_at: string
           user_id: string
+          year_of_study: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -267,10 +269,12 @@ export type Database = {
           campus?: string | null
           college?: string | null
           created_at?: string
+          department?: string | null
           full_name?: string | null
           id?: string
           updated_at?: string
           user_id: string
+          year_of_study?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -278,10 +282,12 @@ export type Database = {
           campus?: string | null
           college?: string | null
           created_at?: string
+          department?: string | null
           full_name?: string | null
           id?: string
           updated_at?: string
           user_id?: string
+          year_of_study?: string | null
         }
         Relationships: []
       }
