@@ -2,9 +2,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   Send, User, Circle, Paperclip, Image as ImageIcon, FileText, X, Download,
-  Check, CheckCheck, Users, Plus, Search, UserPlus, UserCheck, UserX,
-  MessageSquare, Settings, LogOut as LeaveIcon, ChevronLeft, Smile,
-  Reply, Shield, Crown, Trash2, UserMinus
+  Check, CheckCheck, Users, Plus, Search, MessageSquare, Settings, LogOut as LeaveIcon,
+  ChevronLeft, Smile, Reply, Shield, Crown, Trash2, UserMinus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,23 +50,6 @@ interface Profile {
   college: string | null;
 }
 
-interface FriendRequest {
-  id: string;
-  sender_id: string;
-  receiver_id: string;
-  status: string;
-  created_at: string;
-  profile?: Profile;
-}
-
-interface Friendship {
-  id: string;
-  user_id: string;
-  friend_id: string;
-  created_at: string;
-  profile?: Profile;
-}
-
 interface GroupMemberInfo {
   user_id: string;
   role: string;
@@ -80,8 +62,6 @@ interface Reaction {
   user_id: string;
   emoji: string;
 }
-
-type SidebarTab = "chats" | "following" | "requests" | "find";
 
 const REACTION_EMOJIS = ["❤️", "😂", "😮", "😢", "👍", "🔥"];
 
@@ -98,17 +78,7 @@ const Messages = () => {
   const [showSidebar, setShowSidebar] = useState(true);
   const [groupMessages, setGroupMessages] = useState<any[]>([]);
   const [chatMode, setChatMode] = useState<"dm" | "group">("dm");
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("chats");
   const [senderNames, setSenderNames] = useState<Record<string, string>>({});
-
-  // Follow system state (Instagram-style)
-  const [following, setFollowing] = useState<Friendship[]>([]);
-  const [followers, setFollowers] = useState<Friendship[]>([]);
-  const [incomingRequests, setIncomingRequests] = useState<FriendRequest[]>([]);
-  const [sentRequests, setSentRequests] = useState<FriendRequest[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<Profile[]>([]);
-  const [searching, setSearching] = useState(false);
 
   // Group management
   const [groupInfoOpen, setGroupInfoOpen] = useState(false);
@@ -120,6 +90,9 @@ const Messages = () => {
 
   // Reactions
   const [reactions, setReactions] = useState<Record<string, Reaction[]>>({});
+
+  // Delete chat
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -142,8 +115,6 @@ const Messages = () => {
 
   useEffect(() => {
     if (user) {
-      fetchFollowing();
-      fetchRequests();
       fetchConversations();
 
       const channel = supabase
@@ -192,11 +163,6 @@ const Messages = () => {
         })
         .subscribe();
 
-      const friendChannel = supabase
-        .channel("friend-requests-realtime")
-        .on("postgres_changes", { event: "*", schema: "public", table: "friend_requests" }, () => fetchRequests())
-        .subscribe();
-
       const reactionChannel = supabase
         .channel("reactions-realtime")
         .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, () => {
@@ -208,7 +174,6 @@ const Messages = () => {
         supabase.removeChannel(channel);
         supabase.removeChannel(presenceChannel);
         supabase.removeChannel(groupChannel);
-        supabase.removeChannel(friendChannel);
         supabase.removeChannel(reactionChannel);
       };
     }
@@ -228,46 +193,6 @@ const Messages = () => {
       fetchReactionsForChat();
     }
   }, [activeChat]);
-
-  // Instagram-style: fetch who YOU follow
-  const fetchFollowing = async () => {
-    if (!user) return;
-    const { data } = await supabase.from("friendships").select("*").eq("user_id", user.id);
-    if (!data) return;
-    const enriched: Friendship[] = [];
-    for (const f of data) {
-      const { data: profile } = await supabase.from("profiles").select("user_id, full_name, avatar_url, college").eq("user_id", f.friend_id).single();
-      enriched.push({ ...f, profile: profile || undefined } as Friendship);
-    }
-    setFollowing(enriched);
-
-    // Also fetch followers
-    const { data: followerData } = await supabase.from("friendships").select("*").eq("friend_id", user.id);
-    if (followerData) {
-      const enrichedFollowers: Friendship[] = [];
-      for (const f of followerData) {
-        const { data: profile } = await supabase.from("profiles").select("user_id, full_name, avatar_url, college").eq("user_id", f.user_id).single();
-        enrichedFollowers.push({ ...f, profile: profile || undefined } as Friendship);
-      }
-      setFollowers(enrichedFollowers);
-    }
-  };
-
-  const fetchRequests = async () => {
-    if (!user) return;
-    const { data: incoming } = await supabase.from("friend_requests").select("*").eq("receiver_id", user.id).eq("status", "pending");
-    if (incoming) {
-      const enriched = await Promise.all(
-        incoming.map(async (r: any) => {
-          const { data: profile } = await supabase.from("profiles").select("user_id, full_name, avatar_url, college").eq("user_id", r.sender_id).single();
-          return { ...r, profile: profile || undefined } as FriendRequest;
-        })
-      );
-      setIncomingRequests(enriched);
-    }
-    const { data: sent } = await supabase.from("friend_requests").select("*").eq("sender_id", user.id).eq("status", "pending");
-    if (sent) setSentRequests(sent as FriendRequest[]);
-  };
 
   const fetchConversations = async () => {
     if (!user) return;
@@ -362,66 +287,11 @@ const Messages = () => {
     }
   };
 
-  // Re-fetch reactions when messages change
   useEffect(() => {
     if (activeChat && (messages.length > 0 || groupMessages.length > 0)) {
       fetchReactionsForChat();
     }
   }, [messages.length, groupMessages.length]);
-
-  // Follow actions (Instagram-style)
-  const handleSearch = async () => {
-    if (!searchQuery.trim() || !user) return;
-    setSearching(true);
-    const { data } = await supabase.from("profiles").select("user_id, full_name, avatar_url, college").neq("user_id", user.id).ilike("full_name", `%${searchQuery}%`).limit(20);
-    setSearchResults((data as Profile[]) || []);
-    setSearching(false);
-  };
-
-  const sendFollowRequest = async (receiverId: string) => {
-    if (!user || receiverId === user.id) return;
-    const { error } = await supabase.from("friend_requests").insert({ sender_id: user.id, receiver_id: receiverId });
-    if (error) {
-      if (error.code === "23505") toast({ title: "Already sent" });
-      else toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Follow request sent! 🎉" });
-      fetchRequests();
-    }
-  };
-
-  const acceptRequest = async (requestId: string, senderId: string) => {
-    if (!user) return;
-    await supabase.from("friend_requests").update({ status: "accepted" }).eq("id", requestId);
-    // Instagram-style: only the sender follows the receiver (one-way)
-    await supabase.from("friendships").insert({ user_id: senderId, friend_id: user.id });
-    toast({ title: "Request accepted! They now follow you." });
-    fetchFollowing();
-    fetchRequests();
-  };
-
-  const rejectRequest = async (requestId: string) => {
-    await supabase.from("friend_requests").update({ status: "rejected" }).eq("id", requestId);
-    toast({ title: "Request declined" });
-    fetchRequests();
-  };
-
-  // Unfollow: only removes YOUR follow (one-way, Instagram-style)
-  const unfollowUser = async (targetUserId: string) => {
-    if (!user) return;
-    await supabase.from("friendships").delete().eq("user_id", user.id).eq("friend_id", targetUserId);
-    toast({ title: "Unfollowed" });
-    fetchFollowing();
-  };
-
-  const isFollowing = (userId: string) => following.some(f => f.friend_id === userId);
-  const hasSentRequest = (userId: string) => sentRequests.some(r => r.receiver_id === userId);
-
-  const messagePerson = (userId: string) => {
-    setActiveChat(userId);
-    setSidebarTab("chats");
-    setShowSidebar(false);
-  };
 
   // Group admin actions
   const removeMember = async (groupId: string, memberId: string) => {
@@ -453,6 +323,21 @@ const Messages = () => {
     fetchConversations();
   };
 
+  // Delete chat (clears messages for the user - DM only)
+  const deleteChat = async (chatUserId: string) => {
+    if (!user) return;
+    // Delete all messages between user and chatUserId where user is sender
+    await supabase.from("messages").delete().eq("sender_id", user.id).eq("receiver_id", chatUserId);
+    await supabase.from("messages").delete().eq("sender_id", chatUserId).eq("receiver_id", user.id);
+    toast({ title: "Chat deleted" });
+    if (activeChat === chatUserId) {
+      setActiveChat(null);
+      setMessages([]);
+    }
+    setDeleteTarget(null);
+    fetchConversations();
+  };
+
   // Reactions
   const addReaction = async (messageId: string, emoji: string) => {
     if (!user) return;
@@ -468,7 +353,6 @@ const Messages = () => {
     fetchReactionsForChat();
   };
 
-  // Reply
   const startReply = (msgId: string, content: string, senderName: string) => {
     setReplyingTo({ id: msgId, content: content.substring(0, 60), senderName });
   };
@@ -513,7 +397,6 @@ const Messages = () => {
     setUploading(false);
     if (error) return { url: null, type: null, name: null };
     if (bucket === "resource-files") {
-      // Private bucket: store path, generate signed URL on display
       return { url: filePath, type: attachmentPreview.type, name: file.name };
     }
     const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(filePath);
@@ -601,14 +484,13 @@ const Messages = () => {
     const sName = isGroup && !isMine ? (senderNames[m.sender_id] || "...") : null;
 
     return (
-      <div className={`flex ${isMine ? "justify-end" : "justify-start"} group/msg`}>
+      <div key={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"} group/msg`}>
         <div className="max-w-[78%]">
           <div className={`overflow-hidden rounded-2xl px-4 py-2 text-sm shadow-sm ${
             isMine ? "bg-gradient-primary text-white" : "bg-muted text-foreground"
           }`}>
             {sName && <p className="text-xs font-semibold mb-1 text-primary">{sName}</p>}
 
-            {/* Reply preview */}
             {replyMsg && (
               <div className={`text-xs mb-1.5 px-2 py-1 rounded-lg border-l-2 ${
                 isMine ? "bg-white/15 border-white/40" : "bg-background/50 border-primary/40"
@@ -639,10 +521,8 @@ const Messages = () => {
             </div>
           </div>
 
-          {/* Reactions */}
           {renderReactions(m.id)}
 
-          {/* Action buttons (visible on hover) */}
           <div className={`flex gap-1 mt-0.5 opacity-0 group-hover/msg:opacity-100 transition-opacity ${isMine ? "justify-end" : "justify-start"}`}>
             <Popover>
               <PopoverTrigger asChild>
@@ -676,133 +556,9 @@ const Messages = () => {
     )
   );
 
-  const renderSidebarContent = () => {
-    if (sidebarTab === "chats") {
-      return (
-        <div className="min-h-0 overflow-y-auto">
-          {conversations.length === 0 ? (
-            <div className="p-6 text-center text-muted-foreground text-sm">No conversations yet. Follow people to start chatting!</div>
-          ) : (
-            conversations.map((c) => (
-              <button key={c.userId} className={`w-full p-3 text-left flex items-center gap-3 hover:bg-muted/50 transition-colors ${activeChat === c.userId ? "bg-muted/50" : ""}`} onClick={() => { setActiveChat(c.userId); setShowSidebar(false); }}>
-                <div className="relative">
-                  {c.isGroup ? (
-                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shrink-0"><Users className="h-5 w-5 text-white" /></div>
-                  ) : (
-                    <Avatar url={c.avatarUrl} name={c.name} />
-                  )}
-                  {!c.isGroup && <Circle className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 text-primary fill-primary" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-sm truncate">{c.name}{c.isGroup ? " 👥" : ""}</span>
-                    <span className="text-xs text-muted-foreground shrink-0">{c.lastTime}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground truncate">{c.lastMessage}</p>
-                </div>
-                {c.unread > 0 && <span className="h-5 w-5 rounded-full bg-gradient-primary text-white text-xs flex items-center justify-center shrink-0">{c.unread}</span>}
-              </button>
-            ))
-          )}
-        </div>
-      );
-    }
-
-    if (sidebarTab === "following") {
-      return (
-        <div className="min-h-0 overflow-y-auto p-2 space-y-1">
-          <p className="text-xs font-medium text-muted-foreground px-2 mb-1">Following ({following.length})</p>
-          {following.length === 0 ? (
-            <div className="text-center py-6 text-muted-foreground text-sm"><Users className="h-8 w-8 mx-auto mb-2 opacity-40" /><p>Not following anyone</p></div>
-          ) : (
-            following.map((f) => (
-              <div key={f.id} className="flex items-center gap-2 p-2 rounded-xl hover:bg-muted/50">
-                <Avatar url={f.profile?.avatar_url || null} name={f.profile?.full_name || null} size="h-9 w-9" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{f.profile?.full_name || "Anonymous"}</p>
-                  {f.profile?.college && <p className="text-xs text-muted-foreground truncate">{f.profile.college}</p>}
-                </div>
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => messagePerson(f.friend_id)}><MessageSquare className="h-3.5 w-3.5" /></Button>
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive" onClick={() => unfollowUser(f.friend_id)}><UserMinus className="h-3.5 w-3.5" /></Button>
-              </div>
-            ))
-          )}
-          {followers.length > 0 && (
-            <>
-              <p className="text-xs font-medium text-muted-foreground px-2 mt-3 mb-1">Followers ({followers.length})</p>
-              {followers.map((f) => (
-                <div key={f.id} className="flex items-center gap-2 p-2 rounded-xl hover:bg-muted/50">
-                  <Avatar url={f.profile?.avatar_url || null} name={f.profile?.full_name || null} size="h-9 w-9" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{f.profile?.full_name || "Anonymous"}</p>
-                  </div>
-                  {!isFollowing(f.user_id) && (
-                    <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1" onClick={() => sendFollowRequest(f.user_id)}>
-                      <UserPlus className="h-3 w-3" /> Follow back
-                    </Button>
-                  )}
-                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => messagePerson(f.user_id)}><MessageSquare className="h-3.5 w-3.5" /></Button>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-      );
-    }
-
-    if (sidebarTab === "requests") {
-      return (
-        <div className="min-h-0 overflow-y-auto p-2 space-y-1">
-          {incomingRequests.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-6 text-center">No pending requests</p>
-          ) : (
-            incomingRequests.map((r) => (
-              <div key={r.id} className="flex items-center gap-2 p-2 rounded-xl hover:bg-muted/50">
-                <Avatar url={r.profile?.avatar_url || null} name={r.profile?.full_name || null} size="h-9 w-9" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{r.profile?.full_name || "Anonymous"}</p>
-                  <p className="text-xs text-muted-foreground">Wants to follow you</p>
-                </div>
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-primary" onClick={() => acceptRequest(r.id, r.sender_id)}><UserCheck className="h-3.5 w-3.5" /></Button>
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive" onClick={() => rejectRequest(r.id)}><UserX className="h-3.5 w-3.5" /></Button>
-              </div>
-            ))
-          )}
-        </div>
-      );
-    }
-
-    // Find tab
-    return (
-      <div className="min-h-0 overflow-y-auto p-2 space-y-2">
-        <div className="flex gap-1">
-          <Input placeholder="Search by name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSearch()} className="rounded-full text-sm h-8" />
-          <Button onClick={handleSearch} size="sm" className="bg-gradient-primary text-white rounded-full h-8 w-8 p-0" disabled={searching}><Search className="h-3.5 w-3.5" /></Button>
-        </div>
-        {searchResults.map((p) => (
-          <div key={p.user_id} className="flex items-center gap-2 p-2 rounded-xl hover:bg-muted/50">
-            <Avatar url={p.avatar_url} name={p.full_name} size="h-9 w-9" />
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-sm truncate">{p.full_name || "Anonymous"}</p>
-              {p.college && <p className="text-xs text-muted-foreground truncate">{p.college}</p>}
-            </div>
-            {isFollowing(p.user_id) ? (
-              <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => unfollowUser(p.user_id)}>Unfollow</Button>
-            ) : hasSentRequest(p.user_id) ? (
-              <Badge variant="outline" className="text-xs">Pending</Badge>
-            ) : (
-              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => sendFollowRequest(p.user_id)}><UserPlus className="h-3 w-3" /> Follow</Button>
-            )}
-          </div>
-        ))}
-        {searchResults.length === 0 && searchQuery && !searching && <p className="text-center text-xs text-muted-foreground py-4">No users found</p>}
-      </div>
-    );
-  };
-
   return (
-    <div className="min-h-screen pt-16 px-4 pb-8">
-      <div className="container mx-auto max-w-5xl pt-4">
+    <div className="min-h-screen pt-16 pb-0">
+      <div className="container mx-auto max-w-5xl px-4 pt-4">
         <div className="flex items-center justify-between mb-4">
           <motion.h1 className="font-heading text-3xl font-bold" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <span className="text-gradient">Messages</span>
@@ -810,27 +566,60 @@ const Messages = () => {
           <CreateGroupDialog onGroupCreated={fetchConversations} />
         </div>
 
-        <div className="bg-card rounded-2xl overflow-hidden grid md:grid-cols-[280px_1fr] h-[70vh] min-h-0 shadow-soft border border-border/50">
-          {/* Sidebar */}
+        <div className="bg-card rounded-2xl overflow-hidden grid md:grid-cols-[300px_1fr] h-[calc(100vh-140px)] min-h-0 shadow-soft border border-border/50">
+          {/* Sidebar - Chats only */}
           <div className={`border-r border-border/50 flex flex-col min-h-0 ${activeChat && !showSidebar ? "hidden md:flex" : ""}`}>
-            <div className="flex border-b border-border/50 shrink-0">
-              {([
-                { key: "chats" as const, icon: MessageSquare, label: "Chats" },
-                { key: "following" as const, icon: Users, label: "Following", count: following.length },
-                { key: "requests" as const, icon: UserCheck, label: "Requests", count: incomingRequests.length },
-                { key: "find" as const, icon: Search, label: "Find" },
-              ]).map((t) => (
-                <button key={t.key} onClick={() => setSidebarTab(t.key)} className={`flex-1 py-2.5 text-xs font-medium flex flex-col items-center gap-0.5 transition-colors relative ${sidebarTab === t.key ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}>
-                  <div className="relative">
-                    <t.icon className="h-4 w-4" />
-                    {t.count !== undefined && t.count > 0 && <span className="absolute -top-1.5 -right-2.5 h-4 w-4 rounded-full bg-gradient-primary text-white text-[10px] flex items-center justify-center">{t.count}</span>}
-                  </div>
-                  {t.label}
-                  {sidebarTab === t.key && <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-primary rounded-full" />}
-                </button>
-              ))}
+            <div className="p-3 border-b border-border/50 shrink-0">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Search chats..."
+                  className="pl-9 rounded-full text-sm h-9 bg-muted/50 border-0"
+                  value={newMsg && !activeChat ? newMsg : ""}
+                  readOnly
+                />
+              </div>
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto">{renderSidebarContent()}</div>
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {conversations.length === 0 ? (
+                <div className="p-6 text-center text-muted-foreground text-sm">No conversations yet. Follow people from your Profile to start chatting!</div>
+              ) : (
+                conversations.map((c) => (
+                  <div key={c.userId} className="relative group/conv">
+                    <button
+                      className={`w-full p-3 text-left flex items-center gap-3 hover:bg-muted/50 transition-colors ${activeChat === c.userId ? "bg-muted/50" : ""}`}
+                      onClick={() => { setActiveChat(c.userId); setShowSidebar(false); }}
+                    >
+                      <div className="relative">
+                        {c.isGroup ? (
+                          <div className="h-11 w-11 rounded-full bg-gradient-primary flex items-center justify-center shrink-0"><Users className="h-5 w-5 text-white" /></div>
+                        ) : (
+                          <Avatar url={c.avatarUrl} name={c.name} size="h-11 w-11" />
+                        )}
+                        {!c.isGroup && <Circle className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 text-primary fill-primary" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-sm truncate">{c.name}{c.isGroup ? " 👥" : ""}</span>
+                          <span className="text-[10px] text-muted-foreground shrink-0">{c.lastTime}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">{c.lastMessage}</p>
+                      </div>
+                      {c.unread > 0 && <span className="h-5 min-w-[20px] px-1 rounded-full bg-gradient-primary text-white text-[10px] flex items-center justify-center shrink-0">{c.unread}</span>}
+                    </button>
+                    {/* Delete chat button */}
+                    {!c.isGroup && (
+                      <button
+                        className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover/conv:opacity-100 h-6 w-6 rounded-full bg-destructive/10 flex items-center justify-center text-destructive hover:bg-destructive/20 transition-all"
+                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(c.userId); }}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
           </div>
 
           {/* Chat area */}
@@ -842,11 +631,11 @@ const Messages = () => {
                   <button className="md:hidden text-muted-foreground" onClick={() => setShowSidebar(true)}><ChevronLeft className="h-5 w-5" /></button>
                   <div className="relative">
                     {isGroupChat ? (
-                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center"><Users className="h-4 w-4 text-white" /></div>
+                      <div className="h-9 w-9 rounded-full bg-gradient-primary flex items-center justify-center"><Users className="h-4 w-4 text-white" /></div>
                     ) : activeAvatar ? (
-                      <img src={activeAvatar} alt="" className="h-8 w-8 rounded-full object-cover" />
+                      <img src={activeAvatar} alt="" className="h-9 w-9 rounded-full object-cover" />
                     ) : (
-                      <div className="h-8 w-8 rounded-full bg-gradient-primary flex items-center justify-center"><User className="h-4 w-4 text-white" /></div>
+                      <div className="h-9 w-9 rounded-full bg-gradient-primary flex items-center justify-center"><User className="h-4 w-4 text-white" /></div>
                     )}
                     {!isGroupChat && <Circle className="absolute -bottom-0.5 -right-0.5 h-3 w-3 text-primary fill-primary" />}
                   </div>
@@ -909,7 +698,7 @@ const Messages = () => {
                       <button onClick={clearAttachment} className="text-muted-foreground hover:text-destructive"><X className="h-4 w-4" /></button>
                     </div>
                   )}
-                  <div className="p-4 flex gap-2 items-center">
+                  <div className="p-3 sm:p-4 flex gap-2 items-center">
                     <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileSelect(e, "image")} />
                     <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.xlsx,.xls,.zip,.rar" className="hidden" onChange={(e) => handleFileSelect(e, "file")} />
                     <button onClick={() => imageInputRef.current?.click()} className="text-muted-foreground hover:text-primary transition-colors p-1.5 rounded-full hover:bg-muted"><ImageIcon className="h-5 w-5" /></button>
@@ -922,13 +711,30 @@ const Messages = () => {
                 </div>
               </>
             ) : (
-              <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">Select a conversation or find people to follow</div>
+              <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm flex-col gap-2">
+                <MessageSquare className="h-10 w-10 opacity-30" />
+                <p>Select a conversation to start chatting</p>
+              </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Group Info Dialog with Admin Management */}
+      {/* Delete Chat Confirm Dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Chat?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">This will permanently delete all messages in this conversation for both users.</p>
+          <div className="flex gap-2 mt-4">
+            <Button variant="outline" className="flex-1" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="destructive" className="flex-1" onClick={() => deleteTarget && deleteChat(deleteTarget)}>Delete</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Group Info Dialog */}
       <Dialog open={groupInfoOpen} onOpenChange={setGroupInfoOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
