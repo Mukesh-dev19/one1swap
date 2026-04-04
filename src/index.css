@@ -15,7 +15,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 210 10% 10%;
 
-    --primary: 142 72% 29%;
+    --primary: 199 89% 48%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 220 14% 96%;
@@ -32,22 +32,26 @@
 
     --border: 220 13% 91%;
     --input: 220 13% 91%;
-    --ring: 142 72% 29%;
+    --ring: 199 89% 48%;
 
     --radius: 0.875rem;
 
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 210 10% 30%;
-    --sidebar-primary: 142 72% 29%;
+    --sidebar-primary: 199 89% 48%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 220 14% 96%;
     --sidebar-accent-foreground: 210 10% 30%;
     --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 142 72% 29%;
+    --sidebar-ring: 199 89% 48%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(142, 72%, 29%), hsl(142, 60%, 40%), hsl(160, 84%, 39%));
-    --gradient-glow: linear-gradient(135deg, hsl(142, 72%, 29%, 0.06), hsl(160, 84%, 39%, 0.06), hsl(142, 60%, 40%, 0.06));
-    --shadow-glow: 0 4px 30px hsl(142, 72%, 29%, 0.15);
+    --gradient-primary: linear-gradient(135deg, hsl(199, 89%, 48%), hsl(210, 78%, 50%), hsl(220, 70%, 55%));
+    --gradient-glow: linear-gradient(135deg, hsl(199, 89%, 48%, 0.06), hsl(210, 78%, 50%, 0.06), hsl(220, 70%, 55%, 0.06));
+    --shadow-glow: 0 4px 30px hsl(199, 89%, 48%, 0.15);
+
+    --wa-sent: 168 76% 36%;
+    --wa-received: 0 0% 100%;
+    --wa-bg: 210 20% 96%;
     --shadow-soft: 0 2px 20px hsl(220, 8%, 46%, 0.08);
 
     font-family: 'Inter', sans-serif;

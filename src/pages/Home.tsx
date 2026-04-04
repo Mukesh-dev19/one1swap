@@ -15,28 +15,28 @@ const quickActions = [
     icon: MessageSquare,
     title: "Messages",
     desc: "Chat with students, share files & media",
-    gradient: "from-emerald-500 to-green-600",
+    gradient: "from-sky-500 to-blue-600",
   },
   {
     to: "/resources",
     icon: Search,
     title: "Browse Resources",
     desc: "Find books, notes, electronics & more",
-    gradient: "from-teal-500 to-emerald-500",
+    gradient: "from-blue-500 to-indigo-500",
   },
   {
     to: "/upload",
     icon: Upload,
     title: "Upload Resource",
     desc: "Share your items with the campus",
-    gradient: "from-green-600 to-lime-500",
+    gradient: "from-indigo-500 to-blue-600",
   },
   {
     to: "/dashboard",
     icon: LayoutDashboard,
     title: "Dashboard",
     desc: "Track your uploads, saves & activity",
-    gradient: "from-emerald-600 to-teal-500",
+    gradient: "from-cyan-500 to-blue-500",
   },
 ];
 

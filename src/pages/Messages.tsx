@@ -3,7 +3,8 @@ import { motion } from "framer-motion";
 import {
   Send, User, Circle, Paperclip, Image as ImageIcon, FileText, X, Download,
   Check, CheckCheck, Users, Plus, Search, MessageSquare, Settings, LogOut as LeaveIcon,
-  ChevronLeft, Smile, Reply, Shield, Crown, Trash2, UserMinus
+  ChevronLeft, Smile, Reply, Shield, Crown, Trash2, UserMinus, MoreVertical,
+  UserX, UserCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,12 +13,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import CreateGroupDialog from "@/components/CreateGroupDialog";
+import AddGroupMembersDialog from "@/components/AddGroupMembersDialog";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle
 } from "@/components/ui/dialog";
 import {
   Popover, PopoverContent, PopoverTrigger
 } from "@/components/ui/popover";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator
+} from "@/components/ui/dropdown-menu";
 
 interface Message {
   id: string;
@@ -79,6 +84,7 @@ const Messages = () => {
   const [groupMessages, setGroupMessages] = useState<any[]>([]);
   const [chatMode, setChatMode] = useState<"dm" | "group">("dm");
   const [senderNames, setSenderNames] = useState<Record<string, string>>({});
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Group management
   const [groupInfoOpen, setGroupInfoOpen] = useState(false);
@@ -93,6 +99,9 @@ const Messages = () => {
 
   // Delete chat
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  // Follow state for DM
+  const [isFollowing, setIsFollowing] = useState(false);
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -189,10 +198,30 @@ const Messages = () => {
       } else {
         setChatMode("dm");
         fetchMessages(activeChat);
+        checkFollowStatus(activeChat);
       }
       fetchReactionsForChat();
     }
   }, [activeChat]);
+
+  const checkFollowStatus = async (otherUserId: string) => {
+    if (!user) return;
+    const { data } = await supabase.from("friendships").select("id").or(`and(user_id.eq.${user.id},friend_id.eq.${otherUserId}),and(user_id.eq.${otherUserId},friend_id.eq.${user.id})`).limit(1);
+    setIsFollowing(!!data && data.length > 0);
+  };
+
+  const toggleFollow = async () => {
+    if (!user || !activeChat || activeChat.startsWith("group:")) return;
+    if (isFollowing) {
+      await supabase.from("friendships").delete().or(`and(user_id.eq.${user.id},friend_id.eq.${activeChat}),and(user_id.eq.${activeChat},friend_id.eq.${user.id})`);
+      setIsFollowing(false);
+      toast({ title: "Unfollowed" });
+    } else {
+      await supabase.from("friendships").insert({ user_id: user.id, friend_id: activeChat });
+      setIsFollowing(true);
+      toast({ title: "Following!" });
+    }
+  };
 
   const fetchConversations = async () => {
     if (!user) return;
@@ -293,7 +322,6 @@ const Messages = () => {
     }
   }, [messages.length, groupMessages.length]);
 
-  // Group admin actions
   const removeMember = async (groupId: string, memberId: string) => {
     await supabase.from("group_members").delete().eq("group_id", groupId).eq("user_id", memberId);
     toast({ title: "Member removed" });
@@ -323,10 +351,8 @@ const Messages = () => {
     fetchConversations();
   };
 
-  // Delete chat (clears messages for the user - DM only)
   const deleteChat = async (chatUserId: string) => {
     if (!user) return;
-    // Delete all messages between user and chatUserId where user is sender
     await supabase.from("messages").delete().eq("sender_id", user.id).eq("receiver_id", chatUserId);
     await supabase.from("messages").delete().eq("sender_id", chatUserId).eq("receiver_id", user.id);
     toast({ title: "Chat deleted" });
@@ -338,7 +364,6 @@ const Messages = () => {
     fetchConversations();
   };
 
-  // Reactions
   const addReaction = async (messageId: string, emoji: string) => {
     if (!user) return;
     const existing = reactions[messageId]?.find(r => r.user_id === user.id && r.emoji === emoji);
@@ -357,7 +382,6 @@ const Messages = () => {
     setReplyingTo({ id: msgId, content: content.substring(0, 60), senderName });
   };
 
-  // Typing
   const handleTyping = useCallback(() => {
     if (!user || !activeChat) return;
     supabase.channel("presence-chat").send({ type: "broadcast", event: "typing", payload: { userId: user.id, to: activeChat } });
@@ -429,6 +453,13 @@ const Messages = () => {
     setReplyingTo(null);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && !e.shiftKey && !uploading) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
   const activeConv = conversations.find((c) => c.userId === activeChat);
   const activeName = activeConv?.name || "";
   const activeAvatar = activeConv?.avatarUrl;
@@ -442,7 +473,7 @@ const Messages = () => {
 
   const renderTicks = (m: Message) => {
     if (m.sender_id !== user?.id) return null;
-    if (m.read) return <CheckCheck className="h-3.5 w-3.5 text-blue-400 inline-block ml-1" />;
+    if (m.read) return <CheckCheck className="h-3.5 w-3.5 text-sky-400 inline-block ml-1" />;
     return <Check className="h-3.5 w-3.5 text-white/60 inline-block ml-1" />;
   };
 
@@ -479,6 +510,17 @@ const Messages = () => {
     );
   };
 
+  // Date separator helper
+  const getDateLabel = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (d.toDateString() === now.toDateString()) return "Today";
+    if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+    return d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+  };
+
   const renderMessageBubble = (m: any, isMine: boolean, isGroup: boolean) => {
     const replyMsg = findReplyMessage(m.reply_to_id);
     const sName = isGroup && !isMine ? (senderNames[m.sender_id] || "...") : null;
@@ -487,13 +529,15 @@ const Messages = () => {
       <div key={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"} group/msg`}>
         <div className="max-w-[78%]">
           <div className={`overflow-hidden rounded-2xl px-4 py-2 text-sm shadow-sm ${
-            isMine ? "bg-gradient-primary text-white" : "bg-muted text-foreground"
+            isMine
+              ? "bg-[hsl(var(--wa-sent))] text-white"
+              : "bg-white text-foreground border border-border/30"
           }`}>
             {sName && <p className="text-xs font-semibold mb-1 text-primary">{sName}</p>}
 
             {replyMsg && (
               <div className={`text-xs mb-1.5 px-2 py-1 rounded-lg border-l-2 ${
-                isMine ? "bg-white/15 border-white/40" : "bg-background/50 border-primary/40"
+                isMine ? "bg-white/15 border-white/40" : "bg-muted/50 border-primary/40"
               }`}>
                 <p className="opacity-70 truncate">{replyMsg.content}</p>
               </div>
@@ -506,7 +550,7 @@ const Messages = () => {
             )}
             {m.attachment_type === "file" && m.attachment_url && (
               <a href={m.attachment_url} target="_blank" rel="noopener noreferrer"
-                className={`flex items-center gap-2 rounded-xl px-3 py-2 mb-1 ${isMine ? "bg-white/20" : "bg-background/50"}`}>
+                className={`flex items-center gap-2 rounded-xl px-3 py-2 mb-1 ${isMine ? "bg-white/20" : "bg-muted/50"}`}>
                 <FileText className="h-4 w-4 shrink-0" />
                 <span className="text-xs truncate max-w-[150px]">{m.attachment_name || "File"}</span>
                 <Download className="h-3 w-3 shrink-0" />
@@ -546,7 +590,25 @@ const Messages = () => {
     );
   };
 
-  const Avatar = ({ url, name, size = "h-10 w-10" }: { url: string | null; name: string | null; size?: string }) => (
+  const renderMessagesWithDates = (msgs: any[], isGroup: boolean) => {
+    let lastDate = "";
+    const elements: React.ReactNode[] = [];
+    msgs.forEach((m) => {
+      const dateLabel = getDateLabel(m.created_at);
+      if (dateLabel !== lastDate) {
+        lastDate = dateLabel;
+        elements.push(
+          <div key={`date-${m.id}`} className="flex justify-center my-3">
+            <span className="text-[11px] bg-muted/80 text-muted-foreground px-3 py-1 rounded-full shadow-sm">{dateLabel}</span>
+          </div>
+        );
+      }
+      elements.push(renderMessageBubble(m, m.sender_id === user?.id, isGroup));
+    });
+    return elements;
+  };
+
+  const AvatarEl = ({ url, name, size = "h-10 w-10" }: { url: string | null; name: string | null; size?: string }) => (
     url ? (
       <img src={url} alt="" className={`${size} rounded-full object-cover`} />
     ) : (
@@ -556,18 +618,22 @@ const Messages = () => {
     )
   );
 
+  const filteredConversations = conversations.filter(c =>
+    c.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div className="min-h-screen pt-16 pb-0">
-      <div className="container mx-auto max-w-5xl px-4 pt-4">
-        <div className="flex items-center justify-between mb-4">
-          <motion.h1 className="font-heading text-3xl font-bold" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+      <div className="container mx-auto max-w-5xl px-2 sm:px-4 pt-2 sm:pt-4">
+        <div className="flex items-center justify-between mb-3">
+          <motion.h1 className="font-heading text-2xl sm:text-3xl font-bold" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <span className="text-gradient">Messages</span>
           </motion.h1>
           <CreateGroupDialog onGroupCreated={fetchConversations} />
         </div>
 
-        <div className="bg-card rounded-2xl overflow-hidden grid md:grid-cols-[300px_1fr] h-[calc(100vh-140px)] min-h-0 shadow-soft border border-border/50">
-          {/* Sidebar - Chats only */}
+        <div className="bg-card rounded-2xl overflow-hidden grid md:grid-cols-[320px_1fr] h-[calc(100vh-130px)] min-h-0 shadow-soft border border-border/50">
+          {/* Sidebar */}
           <div className={`border-r border-border/50 flex flex-col min-h-0 ${activeChat && !showSidebar ? "hidden md:flex" : ""}`}>
             <div className="p-3 border-b border-border/50 shrink-0">
               <div className="relative">
@@ -575,47 +641,42 @@ const Messages = () => {
                 <Input
                   placeholder="Search chats..."
                   className="pl-9 rounded-full text-sm h-9 bg-muted/50 border-0"
-                  value={newMsg && !activeChat ? newMsg : ""}
-                  readOnly
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto">
-              {conversations.length === 0 ? (
-                <div className="p-6 text-center text-muted-foreground text-sm">No conversations yet. Follow people from your Profile to start chatting!</div>
+              {filteredConversations.length === 0 ? (
+                <div className="p-6 text-center text-muted-foreground text-sm">
+                  {conversations.length === 0 ? "No conversations yet. Follow people from your Profile to start chatting!" : "No matching chats"}
+                </div>
               ) : (
-                conversations.map((c) => (
+                filteredConversations.map((c) => (
                   <div key={c.userId} className="relative group/conv">
                     <button
-                      className={`w-full p-3 text-left flex items-center gap-3 hover:bg-muted/50 transition-colors ${activeChat === c.userId ? "bg-muted/50" : ""}`}
+                      className={`w-full p-3 text-left flex items-center gap-3 transition-colors ${
+                        activeChat === c.userId ? "bg-primary/10" : "hover:bg-muted/50"
+                      }`}
                       onClick={() => { setActiveChat(c.userId); setShowSidebar(false); }}
                     >
                       <div className="relative">
                         {c.isGroup ? (
-                          <div className="h-11 w-11 rounded-full bg-gradient-primary flex items-center justify-center shrink-0"><Users className="h-5 w-5 text-white" /></div>
+                          <div className="h-12 w-12 rounded-full bg-gradient-primary flex items-center justify-center shrink-0"><Users className="h-5 w-5 text-white" /></div>
                         ) : (
-                          <Avatar url={c.avatarUrl} name={c.name} size="h-11 w-11" />
+                          <AvatarEl url={c.avatarUrl} name={c.name} size="h-12 w-12" />
                         )}
-                        {!c.isGroup && <Circle className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 text-primary fill-primary" />}
+                        {!c.isGroup && <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-card" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
                           <span className="font-semibold text-sm truncate">{c.name}{c.isGroup ? " 👥" : ""}</span>
                           <span className="text-[10px] text-muted-foreground shrink-0">{c.lastTime}</span>
                         </div>
-                        <p className="text-xs text-muted-foreground truncate">{c.lastMessage}</p>
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">{c.lastMessage}</p>
                       </div>
-                      {c.unread > 0 && <span className="h-5 min-w-[20px] px-1 rounded-full bg-gradient-primary text-white text-[10px] flex items-center justify-center shrink-0">{c.unread}</span>}
+                      {c.unread > 0 && <span className="h-5 min-w-[20px] px-1 rounded-full bg-primary text-white text-[10px] flex items-center justify-center shrink-0 font-bold">{c.unread}</span>}
                     </button>
-                    {/* Delete chat button */}
-                    {!c.isGroup && (
-                      <button
-                        className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover/conv:opacity-100 h-6 w-6 rounded-full bg-destructive/10 flex items-center justify-center text-destructive hover:bg-destructive/20 transition-all"
-                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(c.userId); }}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    )}
                   </div>
                 ))
               )}
@@ -623,11 +684,11 @@ const Messages = () => {
           </div>
 
           {/* Chat area */}
-          <div className="flex min-h-0 flex-col">
+          <div className={`flex min-h-0 flex-col bg-[hsl(var(--wa-bg))] ${!activeChat || showSidebar ? "hidden md:flex" : ""}`}>
             {activeChat ? (
               <>
-                {/* Header */}
-                <div className="px-4 py-3 border-b border-border/50 flex items-center gap-3">
+                {/* Header with three-dot menu */}
+                <div className="px-3 sm:px-4 py-3 border-b border-border/50 flex items-center gap-3 bg-card">
                   <button className="md:hidden text-muted-foreground" onClick={() => setShowSidebar(true)}><ChevronLeft className="h-5 w-5" /></button>
                   <div className="relative">
                     {isGroupChat ? (
@@ -637,32 +698,71 @@ const Messages = () => {
                     ) : (
                       <div className="h-9 w-9 rounded-full bg-gradient-primary flex items-center justify-center"><User className="h-4 w-4 text-white" /></div>
                     )}
-                    {!isGroupChat && <Circle className="absolute -bottom-0.5 -right-0.5 h-3 w-3 text-primary fill-primary" />}
+                    {!isGroupChat && <div className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-500 border-2 border-card" />}
                   </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-sm">{activeName}{isGroupChat ? " 👥" : ""}</p>
-                    {otherTyping ? <p className="text-xs text-primary animate-pulse">typing...</p> : isGroupChat ? <p className="text-xs text-muted-foreground">{groupMembersInfo.length} members</p> : <p className="text-xs text-primary">online</p>}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm truncate">{activeName}{isGroupChat ? " 👥" : ""}</p>
+                    {otherTyping ? (
+                      <p className="text-xs text-primary animate-pulse">typing...</p>
+                    ) : isGroupChat ? (
+                      <p className="text-xs text-muted-foreground">{groupMembersInfo.length} members</p>
+                    ) : (
+                      <p className="text-xs text-green-500">online</p>
+                    )}
                   </div>
-                  {isGroupChat && (
-                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setGroupInfoOpen(true)}><Settings className="h-4 w-4" /></Button>
-                  )}
+
+                  {/* Three-dot menu (WhatsApp style) */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="icon" variant="ghost" className="h-8 w-8">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      {isGroupChat ? (
+                        <>
+                          <DropdownMenuItem onClick={() => setGroupInfoOpen(true)}>
+                            <Users className="h-4 w-4 mr-2" /> Group Info
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-destructive" onClick={leaveGroup}>
+                            <LeaveIcon className="h-4 w-4 mr-2" /> Leave Group
+                          </DropdownMenuItem>
+                        </>
+                      ) : (
+                        <>
+                          <DropdownMenuItem onClick={toggleFollow}>
+                            {isFollowing ? (
+                              <><UserX className="h-4 w-4 mr-2" /> Unfollow</>
+                            ) : (
+                              <><UserCheck className="h-4 w-4 mr-2" /> Follow</>
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget(activeChat)}>
+                            <Trash2 className="h-4 w-4 mr-2" /> Delete Chat
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
 
-                {/* Messages */}
-                <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-4">
+                {/* Messages with date separators */}
+                <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 sm:px-4 py-4">
                   <div className="flex min-h-full flex-col justify-end">
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       {chatMode === "dm"
-                        ? messages.map((m) => renderMessageBubble(m, m.sender_id === user?.id, false))
-                        : groupMessages.map((m) => renderMessageBubble(m, m.sender_id === user?.id, true))
+                        ? renderMessagesWithDates(messages, false)
+                        : renderMessagesWithDates(groupMessages, true)
                       }
                       {otherTyping && (
                         <div className="flex justify-start">
-                          <div className="bg-muted rounded-2xl px-4 py-2 text-sm text-muted-foreground">
+                          <div className="bg-white rounded-2xl px-4 py-2 text-sm text-muted-foreground border border-border/30 shadow-sm">
                             <span className="flex gap-1">
-                              <span className="animate-bounce" style={{ animationDelay: "0ms" }}>•</span>
-                              <span className="animate-bounce" style={{ animationDelay: "150ms" }}>•</span>
-                              <span className="animate-bounce" style={{ animationDelay: "300ms" }}>•</span>
+                              <span className="animate-bounce inline-block" style={{ animationDelay: "0ms" }}>•</span>
+                              <span className="animate-bounce inline-block" style={{ animationDelay: "150ms" }}>•</span>
+                              <span className="animate-bounce inline-block" style={{ animationDelay: "300ms" }}>•</span>
                             </span>
                           </div>
                         </div>
@@ -673,7 +773,7 @@ const Messages = () => {
 
                 {/* Reply preview */}
                 {replyingTo && (
-                  <div className="px-4 py-2 border-t border-border/30 bg-muted/30 flex items-center gap-2">
+                  <div className="px-4 py-2 border-t border-border/30 bg-card flex items-center gap-2">
                     <Reply className="h-4 w-4 text-primary shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-primary">{replyingTo.senderName}</p>
@@ -683,8 +783,8 @@ const Messages = () => {
                   </div>
                 )}
 
-                {/* Input */}
-                <div className="border-t border-border/50">
+                {/* Input bar */}
+                <div className="border-t border-border/50 bg-card">
                   {attachmentPreview && (
                     <div className="px-4 pt-3 flex items-center gap-3">
                       {attachmentPreview.type === "image" && attachmentPreview.previewUrl ? (
@@ -698,20 +798,31 @@ const Messages = () => {
                       <button onClick={clearAttachment} className="text-muted-foreground hover:text-destructive"><X className="h-4 w-4" /></button>
                     </div>
                   )}
-                  <div className="p-3 sm:p-4 flex gap-2 items-center">
+                  <div className="p-2 sm:p-3 flex gap-2 items-center">
                     <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileSelect(e, "image")} />
                     <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.xlsx,.xls,.zip,.rar" className="hidden" onChange={(e) => handleFileSelect(e, "file")} />
                     <button onClick={() => imageInputRef.current?.click()} className="text-muted-foreground hover:text-primary transition-colors p-1.5 rounded-full hover:bg-muted"><ImageIcon className="h-5 w-5" /></button>
                     <button onClick={() => fileInputRef.current?.click()} className="text-muted-foreground hover:text-primary transition-colors p-1.5 rounded-full hover:bg-muted"><Paperclip className="h-5 w-5" /></button>
-                    <Input placeholder="Type a message..." value={newMsg} onChange={handleInputChange} onKeyDown={(e) => e.key === "Enter" && !uploading && handleSend()} className="min-w-0 flex-1 rounded-full" />
-                    <Button onClick={handleSend} className="bg-gradient-primary rounded-full text-white" disabled={uploading}>
+                    <Input
+                      placeholder="Type a message..."
+                      value={newMsg}
+                      onChange={handleInputChange}
+                      onKeyDown={handleKeyDown}
+                      className="min-w-0 flex-1 rounded-full bg-muted/50"
+                    />
+                    <Button
+                      onClick={handleSend}
+                      className={`rounded-full transition-colors ${newMsg.trim() || attachmentPreview ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}
+                      disabled={uploading || (!newMsg.trim() && !attachmentPreview)}
+                      size="icon"
+                    >
                       {uploading ? <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" /> : <Send className="h-4 w-4" />}
                     </Button>
                   </div>
                 </div>
               </>
             ) : (
-              <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm flex-col gap-2">
+              <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm flex-col gap-2 bg-card">
                 <MessageSquare className="h-10 w-10 opacity-30" />
                 <p>Select a conversation to start chatting</p>
               </div>
@@ -734,7 +845,7 @@ const Messages = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Group Info Dialog */}
+      {/* Group Info Dialog with Add Members */}
       <Dialog open={groupInfoOpen} onOpenChange={setGroupInfoOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -743,6 +854,16 @@ const Messages = () => {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {isCurrentUserAdmin() && activeChat && (
+              <AddGroupMembersDialog
+                groupId={activeChat.replace("group:", "")}
+                existingMemberIds={groupMembersInfo.map(m => m.user_id)}
+                onMembersAdded={() => {
+                  fetchGroupMembersInfo(activeChat!.replace("group:", ""));
+                  fetchConversations();
+                }}
+              />
+            )}
             <div>
               <h4 className="font-medium text-sm mb-2">Members ({groupMembersInfo.length})</h4>
               <div className="space-y-1.5 max-h-60 overflow-y-auto">
@@ -752,7 +873,7 @@ const Messages = () => {
                   const canManage = isCurrentUserAdmin() && m.user_id !== user?.id;
                   return (
                     <div key={m.user_id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50">
-                      <Avatar url={m.profile.avatar_url} name={m.profile.full_name} size="h-8 w-8" />
+                      <AvatarEl url={m.profile.avatar_url} name={m.profile.full_name} size="h-8 w-8" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <span className="text-sm font-medium truncate">{m.profile.full_name || "Anonymous"}</span>
