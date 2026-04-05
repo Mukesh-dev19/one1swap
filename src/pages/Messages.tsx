@@ -627,7 +627,11 @@ const Messages = () => {
       <div className="flex-1 min-h-0 grid md:grid-cols-[320px_1fr]">
           {/* Sidebar */}
           <div className={`border-r border-border/50 flex flex-col min-h-0 bg-card ${activeChat && !showSidebar ? "hidden md:flex" : ""}`}>
-            <div className="p-3 border-b border-border/50 shrink-0 flex items-center gap-2">
+            <div className="p-3 border-b border-border/50 shrink-0">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="font-heading font-bold text-lg">Chats</h2>
+                <CreateGroupDialog onGroupCreated={fetchConversations} />
+              </div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
