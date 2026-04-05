@@ -18,12 +18,11 @@ const Navbar = () => {
 
   const navLinks = user
     ? [
-        { to: "/home", label: "Home", icon: Home },
         { to: "/resources", label: "Resources", icon: BookOpen },
         { to: "/messages", label: "Messages", icon: MessageSquare },
         { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       ]
-    : [{ to: "/", label: "Home", icon: Home }];
+    : [];
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-card/80 backdrop-blur-xl border-b border-border/50">
@@ -32,6 +31,7 @@ const Navbar = () => {
           <img src={logo} alt="OneSwap" className="h-8 w-8 rounded-lg object-cover" />
           <span className="font-heading text-lg font-bold text-gradient">OneSwap</span>
         </Link>
+        <span className="hidden lg:block text-xs text-muted-foreground font-light italic tracking-wide">By students, For students, From India</span>
 
         <div className="hidden md:flex items-center gap-1">
           {navLinks.map((l) => (
