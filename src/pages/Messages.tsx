@@ -821,7 +821,6 @@ const Messages = () => {
             )}
           </div>
         </div>
-      </div>
 
       {/* Delete Chat Confirm Dialog */}
       <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
