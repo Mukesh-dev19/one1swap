@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, X, User, MessageSquare, Home, LayoutDashboard, LogOut, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import logo from "@/assets/logo.jpeg";
 
 const Navbar = () => {
@@ -10,14 +11,36 @@ const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) { setUnreadCount(0); return; }
+    const fetchUnread = async () => {
+      const { count } = await supabase
+        .from("messages")
+        .select("*", { count: "exact", head: true })
+        .eq("receiver_id", user.id)
+        .eq("read", false);
+      setUnreadCount(count || 0);
+    };
+    fetchUnread();
+    const channel = supabase
+      .channel("unread-nav")
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, fetchUnread)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
 
   const handleSignOut = async () => {
     await signOut();
     navigate("/");
   };
 
+  const isLanding = location.pathname === "/";
+
   const navLinks = user
     ? [
+        { to: "/home", label: "Home", icon: Home },
         { to: "/resources", label: "Resources", icon: BookOpen },
         { to: "/messages", label: "Messages", icon: MessageSquare },
         { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -31,7 +54,9 @@ const Navbar = () => {
           <img src={logo} alt="OneSwap" className="h-8 w-8 rounded-lg object-cover" />
           <span className="font-heading text-lg font-bold text-gradient">OneSwap</span>
         </Link>
-        <span className="hidden lg:block text-xs text-muted-foreground font-light italic tracking-wide">By students, For students, From India</span>
+        {isLanding && !user && (
+          <span className="hidden lg:block text-xs text-muted-foreground font-light italic tracking-wide">By students, For students, From India</span>
+        )}
 
         <div className="hidden md:flex items-center gap-1">
           {navLinks.map((l) => (
@@ -39,10 +64,15 @@ const Navbar = () => {
               <Button
                 variant={location.pathname === l.to ? "default" : "ghost"}
                 size="sm"
-                className={`gap-1.5 ${location.pathname === l.to ? "bg-gradient-primary text-white" : ""}`}
+                className={`gap-1.5 relative ${location.pathname === l.to ? "bg-gradient-primary text-white" : ""}`}
               >
                 <l.icon className="h-4 w-4" />
                 {l.label}
+                {l.to === "/messages" && unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center font-bold">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
               </Button>
             </Link>
           ))}
@@ -83,8 +113,13 @@ const Navbar = () => {
         <div className="md:hidden bg-card border-t border-border/50 px-4 pb-4 space-y-1">
           {navLinks.map((l) => (
             <Link key={l.to} to={l.to} onClick={() => setOpen(false)}>
-              <Button variant="ghost" className="w-full justify-start gap-2">
+              <Button variant="ghost" className="w-full justify-start gap-2 relative">
                 <l.icon className="h-4 w-4" /> {l.label}
+                {l.to === "/messages" && unreadCount > 0 && (
+                  <span className="ml-auto h-5 min-w-[20px] px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center font-bold">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
               </Button>
             </Link>
           ))}
