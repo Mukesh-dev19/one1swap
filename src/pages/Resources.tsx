@@ -119,13 +119,20 @@ const Resources = () => {
     <div className="min-h-screen pt-16 pb-24">
       <div className="container mx-auto max-w-7xl px-4">
         {/* Header */}
-        <motion.div className="pt-6 pb-4" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 className="font-heading text-3xl sm:text-4xl font-bold mb-1">
-            Campus <span className="text-gradient">Marketplace</span>
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            {filtered.length} resources available · Find exactly what you need
-          </p>
+        <motion.div className="pt-6 pb-4 flex items-center justify-between" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+          <div>
+            <h1 className="font-heading text-3xl sm:text-4xl font-bold mb-1">
+              Campus <span className="text-gradient">Marketplace</span>
+            </h1>
+            <p className="text-muted-foreground text-sm">
+              {filtered.length} resources available · Find exactly what you need
+            </p>
+          </div>
+          <Link to="/upload">
+            <Button className="bg-gradient-primary text-white rounded-full gap-2 shrink-0">
+              <Plus className="h-4 w-4" /> Upload
+            </Button>
+          </Link>
         </motion.div>
 
         {/* Search & Controls */}
@@ -400,12 +407,6 @@ const Resources = () => {
         )}
       </div>
 
-      {/* Floating Upload FAB */}
-      <Link to="/upload" className="fixed bottom-6 right-6 z-40">
-        <Button className="h-14 w-14 rounded-full bg-gradient-primary text-white shadow-glow hover:scale-110 transition-transform p-0">
-          <Plus className="h-6 w-6" />
-        </Button>
-      </Link>
     </div>
   );
 };
