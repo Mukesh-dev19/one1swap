@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { Mail, Lock, Eye, EyeOff, User } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, User, GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +17,7 @@ const Register = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [department, setDepartment] = useState("");
   const [loading, setLoading] = useState(false);
   const [nameError, setNameError] = useState("");
   const navigate = useNavigate();
@@ -70,7 +71,7 @@ const Register = () => {
       email,
       password,
       options: {
-        data: { full_name: name.trim() },
+        data: { full_name: name.trim(), department: department.trim() },
         emailRedirectTo: window.location.origin,
       },
     });
@@ -117,6 +118,13 @@ const Register = () => {
               />
             </div>
             {nameError && <p className="text-xs text-destructive mt-1">{nameError}</p>}
+          </div>
+          <div>
+            <Label htmlFor="department">Department</Label>
+            <div className="relative mt-1">
+              <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input id="department" placeholder="e.g. Computer Science" className="pl-10" value={department} onChange={(e) => setDepartment(e.target.value)} />
+            </div>
           </div>
           <div>
             <Label htmlFor="email">College Email</Label>

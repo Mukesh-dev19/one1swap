@@ -86,6 +86,9 @@ const Messages = () => {
   const [senderNames, setSenderNames] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Online presence
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+
   // Group management
   const [groupInfoOpen, setGroupInfoOpen] = useState(false);
   const [groupMembersInfo, setGroupMembersInfo] = useState<GroupMemberInfo[]>([]);
@@ -150,7 +153,11 @@ const Messages = () => {
 
       const presenceChannel = supabase.channel("presence-chat", { config: { presence: { key: user.id } } });
       presenceChannel
-        .on("presence", { event: "sync" }, () => {})
+        .on("presence", { event: "sync" }, () => {
+          const state = presenceChannel.presenceState();
+          const online = new Set<string>(Object.keys(state));
+          setOnlineUsers(online);
+        })
         .on("broadcast", { event: "typing" }, (payload) => {
           if (payload.payload?.userId !== user.id && payload.payload?.to === user.id) {
             setOtherTyping(true);
@@ -662,7 +669,7 @@ const Messages = () => {
                         ) : (
                           <AvatarEl url={c.avatarUrl} name={c.name} size="h-12 w-12" />
                         )}
-                        {!c.isGroup && <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-card" />}
+                        {!c.isGroup && onlineUsers.has(c.userId) && <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-card" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
@@ -694,7 +701,7 @@ const Messages = () => {
                     ) : (
                       <div className="h-9 w-9 rounded-full bg-gradient-primary flex items-center justify-center"><User className="h-4 w-4 text-white" /></div>
                     )}
-                    {!isGroupChat && <div className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-500 border-2 border-card" />}
+                    {!isGroupChat && activeChat && onlineUsers.has(activeChat) && <div className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-500 border-2 border-card" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm truncate">{activeName}{isGroupChat ? " 👥" : ""}</p>
@@ -702,8 +709,10 @@ const Messages = () => {
                       <p className="text-xs text-primary animate-pulse">typing...</p>
                     ) : isGroupChat ? (
                       <p className="text-xs text-muted-foreground">{groupMembersInfo.length} members</p>
-                    ) : (
+                    ) : activeChat && onlineUsers.has(activeChat) ? (
                       <p className="text-xs text-green-500">online</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">offline</p>
                     )}
                   </div>
 

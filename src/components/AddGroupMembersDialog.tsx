@@ -38,8 +38,15 @@ const AddGroupMembersDialog = ({ groupId, existingMemberIds, onMembersAdded }: A
       .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`);
     if (!data) return;
 
-    const friendIds = data.map((f: any) => f.user_id === user.id ? f.friend_id : f.user_id);
-    const uniqueIds = [...new Set(friendIds)].filter(id => !existingMemberIds.includes(id));
+    // Build mutual follow set
+    const followingSet = new Set<string>();
+    const followerSet = new Set<string>();
+    data.forEach((f: any) => {
+      if (f.user_id === user.id) followingSet.add(f.friend_id);
+      if (f.friend_id === user.id) followerSet.add(f.user_id);
+    });
+    const mutualIds = [...followingSet].filter(id => followerSet.has(id));
+    const uniqueIds = mutualIds.filter(id => !existingMemberIds.includes(id));
 
     if (uniqueIds.length === 0) { setFriends([]); return; }
 

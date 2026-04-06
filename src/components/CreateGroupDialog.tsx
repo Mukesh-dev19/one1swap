@@ -24,40 +24,42 @@ const CreateGroupDialog = ({ onGroupCreated }: CreateGroupDialogProps) => {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [friends, setFriends] = useState<UserProfile[]>([]);
-  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [mutualFriends, setMutualFriends] = useState<UserProfile[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    if (open && user) {
-      fetchFriends();
-      fetchAllUsers();
-    }
+    if (open && user) fetchMutualFriends();
   }, [open, user]);
 
-  const fetchFriends = async () => {
+  const fetchMutualFriends = async () => {
     if (!user) return;
+    // Get all friendships where current user is involved
     const { data } = await supabase
       .from("friendships")
       .select("*")
       .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`);
-    if (!data) return;
-    const friendIds = [...new Set(data.map((f: any) => f.user_id === user.id ? f.friend_id : f.user_id))];
-    if (friendIds.length === 0) { setFriends([]); return; }
+    if (!data) { setMutualFriends([]); return; }
+
+    // Build a map: for each other user, check if BOTH directions exist (mutual follow)
+    const followingSet = new Set<string>();
+    const followerSet = new Set<string>();
+    data.forEach((f: any) => {
+      if (f.user_id === user.id) followingSet.add(f.friend_id);
+      if (f.friend_id === user.id) followerSet.add(f.user_id);
+    });
+
+    // Mutual = user follows them AND they follow user
+    const mutualIds = [...followingSet].filter(id => followerSet.has(id));
+    if (mutualIds.length === 0) { setMutualFriends([]); return; }
+
     const profiles: UserProfile[] = [];
-    for (const fid of friendIds) {
+    for (const fid of mutualIds) {
       const { data: p } = await supabase.from("profiles").select("user_id, full_name, avatar_url").eq("user_id", fid).single();
       if (p) profiles.push(p as UserProfile);
     }
-    setFriends(profiles);
-  };
-
-  const fetchAllUsers = async () => {
-    if (!user) return;
-    const { data } = await supabase.from("profiles").select("user_id, full_name, avatar_url").neq("user_id", user.id).limit(100);
-    if (data) setAllUsers(data as UserProfile[]);
+    setMutualFriends(profiles);
   };
 
   const toggleFriend = (userId: string) => {
@@ -98,14 +100,9 @@ const CreateGroupDialog = ({ onGroupCreated }: CreateGroupDialogProps) => {
     onGroupCreated?.();
   };
 
-  const friendIds = new Set(friends.map(f => f.user_id));
-  const otherUsers = allUsers.filter(u => !friendIds.has(u.user_id));
-
-  const filterUsers = (users: UserProfile[]) =>
-    searchQuery ? users.filter(u => (u.full_name || "").toLowerCase().includes(searchQuery.toLowerCase())) : users;
-
-  const filteredFriends = filterUsers(friends);
-  const filteredOthers = filterUsers(otherUsers);
+  const filteredFriends = searchQuery
+    ? mutualFriends.filter(u => (u.full_name || "").toLowerCase().includes(searchQuery.toLowerCase()))
+    : mutualFriends;
 
   const UserRow = ({ u }: { u: UserProfile }) => (
     <label key={u.user_id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 cursor-pointer transition-colors">
@@ -144,26 +141,18 @@ const CreateGroupDialog = ({ onGroupCreated }: CreateGroupDialogProps) => {
             <Input placeholder="What's this group about?" value={description} onChange={(e) => setDescription(e.target.value)} className="mt-1" />
           </div>
           <div>
-            <Label>Add Members</Label>
+            <Label>Add Members (Mutual Follows Only)</Label>
             <div className="relative mt-1 mb-2">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input placeholder="Search users..." className="pl-9 text-sm h-9" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+              <Input placeholder="Search friends..." className="pl-9 text-sm h-9" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
             <div className="max-h-56 overflow-y-auto space-y-1">
-              {filteredFriends.length > 0 && (
-                <>
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 pt-1">Friends</p>
-                  {filteredFriends.map((f) => <UserRow key={f.user_id} u={f} />)}
-                </>
-              )}
-              {filteredOthers.length > 0 && (
-                <>
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 pt-2">Other Users</p>
-                  {filteredOthers.map((u) => <UserRow key={u.user_id} u={u} />)}
-                </>
-              )}
-              {filteredFriends.length === 0 && filteredOthers.length === 0 && (
-                <p className="text-sm text-muted-foreground py-4 text-center">No users found.</p>
+              {filteredFriends.length > 0 ? (
+                filteredFriends.map((f) => <UserRow key={f.user_id} u={f} />)
+              ) : (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  {mutualFriends.length === 0 ? "No mutual follows yet. Follow people and have them follow you back to add them!" : "No matching friends."}
+                </p>
               )}
             </div>
           </div>
