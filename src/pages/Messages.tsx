@@ -86,6 +86,9 @@ const Messages = () => {
   const [senderNames, setSenderNames] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Online presence
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+
   // Group management
   const [groupInfoOpen, setGroupInfoOpen] = useState(false);
   const [groupMembersInfo, setGroupMembersInfo] = useState<GroupMemberInfo[]>([]);
