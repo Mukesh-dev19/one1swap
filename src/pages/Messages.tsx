@@ -714,7 +714,6 @@ const Messages = () => {
                     ) : (
                       <p className="text-xs text-muted-foreground">offline</p>
                     )}
-                    )}
                   </div>
 
                   {/* Three-dot menu (WhatsApp style) */}
