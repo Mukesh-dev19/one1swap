@@ -153,7 +153,11 @@ const Messages = () => {
 
       const presenceChannel = supabase.channel("presence-chat", { config: { presence: { key: user.id } } });
       presenceChannel
-        .on("presence", { event: "sync" }, () => {})
+        .on("presence", { event: "sync" }, () => {
+          const state = presenceChannel.presenceState();
+          const online = new Set<string>(Object.keys(state));
+          setOnlineUsers(online);
+        })
         .on("broadcast", { event: "typing" }, (payload) => {
           if (payload.payload?.userId !== user.id && payload.payload?.to === user.id) {
             setOtherTyping(true);
