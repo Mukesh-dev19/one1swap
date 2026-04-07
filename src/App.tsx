@@ -3,10 +3,13 @@ import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { AdminProvider } from "@/contexts/AdminContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import AdminProtectedRoute from "@/components/AdminProtectedRoute";
 import ScrollToTop from "@/components/ScrollToTop";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import AdminLayout from "@/components/AdminLayout";
 import Index from "./pages/Index";
 import Home from "./pages/Home";
 import Marketplace from "./pages/Marketplace";
@@ -21,6 +24,12 @@ import Dashboard from "./pages/Dashboard";
 import About from "./pages/About";
 import Contact from "./pages/Contact";
 import NotFound from "./pages/NotFound";
+import AdminLogin from "./pages/AdminLogin";
+import AdminOverview from "./pages/admin/AdminOverview";
+import AdminUsers from "./pages/admin/AdminUsers";
+import AdminContent from "./pages/admin/AdminContent";
+import AdminAnalytics from "./pages/admin/AdminAnalytics";
+import AdminActivityLogs from "./pages/admin/AdminActivityLogs";
 
 const queryClient = new QueryClient();
 
@@ -55,12 +64,24 @@ const AppLayout = () => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <BrowserRouter>
-          <AppLayout />
-        </BrowserRouter>
-      </TooltipProvider>
+      <AdminProvider>
+        <TooltipProvider>
+          <Toaster />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/admin-login" element={<AdminLogin />} />
+              <Route path="/admin" element={<AdminProtectedRoute><AdminLayout /></AdminProtectedRoute>}>
+                <Route index element={<AdminOverview />} />
+                <Route path="users" element={<AdminUsers />} />
+                <Route path="content" element={<AdminContent />} />
+                <Route path="analytics" element={<AdminAnalytics />} />
+                <Route path="activity" element={<AdminActivityLogs />} />
+              </Route>
+              <Route path="/*" element={<AppLayout />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </AdminProvider>
     </AuthProvider>
   </QueryClientProvider>
 );
