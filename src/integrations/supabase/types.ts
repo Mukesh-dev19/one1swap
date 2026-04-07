@@ -259,6 +259,7 @@ export type Database = {
           department: string | null
           full_name: string | null
           id: string
+          is_blocked: boolean | null
           updated_at: string
           user_id: string
           year_of_study: string | null
@@ -272,6 +273,7 @@ export type Database = {
           department?: string | null
           full_name?: string | null
           id?: string
+          is_blocked?: boolean | null
           updated_at?: string
           user_id: string
           year_of_study?: string | null
@@ -285,6 +287,7 @@ export type Database = {
           department?: string | null
           full_name?: string | null
           id?: string
+          is_blocked?: boolean | null
           updated_at?: string
           user_id?: string
           year_of_study?: string | null
