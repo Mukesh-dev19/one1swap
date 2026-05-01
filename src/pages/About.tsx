@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Users, Target, Lightbulb, TrendingUp, BookOpen, Heart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import logo from "@/assets/logo.jpeg";
+import BackButton from "@/components/BackButton";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -36,6 +37,7 @@ const About = () => {
   return (
     <div className="min-h-screen pt-20 pb-12 px-4">
       <div className="container mx-auto max-w-4xl">
+        <div className="mb-2"><BackButton /></div>
         {/* Hero */}
         <motion.div className="text-center mb-16" initial="hidden" animate="visible" variants={fadeUp} custom={0}>
           <img src={logo} alt="OneSwap" className="h-16 w-16 rounded-2xl object-cover mx-auto mb-4 shadow-glow" />

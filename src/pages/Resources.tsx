@@ -9,6 +9,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
+import BackButton from "@/components/BackButton";
 
 interface Resource {
   id: string;
@@ -118,6 +119,7 @@ const Resources = () => {
   return (
     <div className="min-h-screen pt-16 pb-24">
       <div className="container mx-auto max-w-7xl px-4">
+        <div className="pt-3 mb-1"><BackButton /></div>
         {/* Header */}
         <motion.div className="pt-6 pb-4 flex items-center justify-between" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <div>

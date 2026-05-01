@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
+import BackButton from "@/components/BackButton";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -44,6 +45,7 @@ const Contact = () => {
   return (
     <div className="min-h-screen pt-20 pb-12 px-4">
       <div className="container mx-auto max-w-4xl">
+        <div className="mb-2"><BackButton /></div>
         <motion.div className="text-center mb-12" initial="hidden" animate="visible" variants={fadeUp} custom={0}>
           <h1 className="font-heading text-3xl sm:text-5xl font-bold mb-4">
             Get in <span className="text-gradient">Touch</span>
