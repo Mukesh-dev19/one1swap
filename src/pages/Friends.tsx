@@ -8,6 +8,7 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import BackButton from "@/components/BackButton";
 
 interface Profile {
   user_id: string;
@@ -196,6 +197,7 @@ const Friends = () => {
   return (
     <div className="min-h-screen pt-16 px-4 pb-8">
       <div className="container mx-auto max-w-3xl pt-4">
+        <div className="mb-3"><BackButton /></div>
         <motion.h1 className="font-heading text-3xl font-bold mb-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <span className="text-gradient">Friends</span>
         </motion.h1>

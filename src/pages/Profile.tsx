@@ -9,6 +9,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
+import BackButton from "@/components/BackButton";
 
 interface ProfileData {
   full_name: string | null;
@@ -234,6 +235,7 @@ const Profile = () => {
   return (
     <div className="min-h-screen pt-16 px-4 pb-8">
       <div className="container mx-auto max-w-3xl pt-4">
+        <div className="mb-3"><BackButton /></div>
         {/* Profile card */}
         <motion.div
           className="bg-card rounded-2xl p-6 sm:p-8 mb-6 shadow-soft border border-border/50"

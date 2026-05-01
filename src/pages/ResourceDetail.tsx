@@ -220,15 +220,35 @@ const ResourceDetail = () => {
                 {resource.files.map((filePath, i) => {
                   const fileName = filePath.split("/").pop() || `File ${i + 1}`;
                   const isFullUrl = filePath.startsWith("http");
+                  const triggerDownload = (url: string, name: string) => {
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = name;
+                    a.target = "_blank";
+                    a.rel = "noopener noreferrer";
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                  };
                   return (
                     <button key={i}
                       onClick={async () => {
-                        if (isFullUrl) {
-                          window.open(filePath, "_blank");
-                        } else {
-                          const { data, error } = await supabase.storage.from("resource-files").createSignedUrl(filePath, 300);
-                          if (data?.signedUrl) window.open(data.signedUrl, "_blank");
-                          else toast({ title: "Error", description: "Could not generate download link", variant: "destructive" });
+                        try {
+                          if (isFullUrl) {
+                            triggerDownload(filePath, fileName);
+                          } else {
+                            const { data, error } = await supabase
+                              .storage
+                              .from("resource-files")
+                              .createSignedUrl(filePath, 300, { download: fileName });
+                            if (error || !data?.signedUrl) {
+                              toast({ title: "Error", description: "Could not generate download link", variant: "destructive" });
+                              return;
+                            }
+                            triggerDownload(data.signedUrl, fileName);
+                          }
+                        } catch (err: any) {
+                          toast({ title: "Download failed", description: err?.message || "Please try again", variant: "destructive" });
                         }
                       }}
                       className="flex items-center gap-2 bg-muted/50 rounded-xl px-4 py-2 hover:bg-muted transition-colors w-full text-left">
