@@ -120,6 +120,47 @@ Deno.serve(async (req) => {
         break
       }
 
+      case 'getAnnouncements': {
+        const { data: announcements } = await supabaseAdmin
+          .from('announcements')
+          .select('*')
+          .order('created_at', { ascending: false })
+        data = announcements || []
+        break
+      }
+
+      case 'createAnnouncement': {
+        const { title, message, type } = params
+        if (!title || !message) {
+          return new Response(JSON.stringify({ error: 'Missing fields' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+        const { data: created, error } = await supabaseAdmin
+          .from('announcements')
+          .insert({ title, message, type: type || 'info', is_active: true })
+          .select()
+          .single()
+        if (error) throw error
+        data = created
+        break
+      }
+
+      case 'toggleAnnouncement': {
+        const { announcementId, isActive } = params
+        await supabaseAdmin.from('announcements').update({ is_active: isActive }).eq('id', announcementId)
+        data = { success: true }
+        break
+      }
+
+      case 'deleteAnnouncement': {
+        const { announcementId } = params
+        await supabaseAdmin.from('announcements').delete().eq('id', announcementId)
+        data = { success: true }
+        break
+      }
+
       case 'getActivityLogs': {
         const { data: recentUsers } = await supabaseAdmin.from('profiles').select('full_name, created_at').order('created_at', { ascending: false }).limit(30)
         const { data: recentResources } = await supabaseAdmin.from('resources').select('title, created_at').order('created_at', { ascending: false }).limit(30)
