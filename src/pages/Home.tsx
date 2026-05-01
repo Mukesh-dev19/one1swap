@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Search, MessageSquare, LayoutDashboard, User, BookOpen, Sparkles, Upload } from "lucide-react";
+import { Search, MessageSquare, LayoutDashboard, User, BookOpen, Sparkles, Upload, Shield } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import logo from "@/assets/logo.jpeg";
 
@@ -132,6 +132,24 @@ const Home = () => {
               </Link>
             </div>
           </motion.div>
+        </div>
+      </section>
+
+      {/* Admin portal access */}
+      <section className="px-4 pb-16">
+        <div className="container mx-auto max-w-4xl">
+          <Link to="/admin-login">
+            <div className="bg-card border border-border/50 rounded-2xl p-5 flex items-center gap-4 hover:border-primary/40 hover:shadow-soft transition-all group">
+              <div className="h-11 w-11 rounded-xl bg-muted flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                <Shield className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-heading font-semibold text-sm">Admin Portal</p>
+                <p className="text-xs text-muted-foreground">Platform management & moderation (authorized personnel only)</p>
+              </div>
+              <span className="text-xs text-muted-foreground">→</span>
+            </div>
+          </Link>
         </div>
       </section>
     </div>
