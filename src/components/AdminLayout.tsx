@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { LayoutDashboard, Users, FileText, BarChart3, Activity, LogOut, Menu, Megaphone } from "lucide-react";
+import { LayoutDashboard, Users, FileText, BarChart3, Activity, LogOut, Menu, Megaphone, Sparkles } from "lucide-react";
 import { useAdmin } from "@/contexts/AdminContext";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -9,6 +9,7 @@ const navItems = [
   { to: "/admin/users", icon: Users, label: "Users" },
   { to: "/admin/content", icon: FileText, label: "Content" },
   { to: "/admin/announcements", icon: Megaphone, label: "Announcements" },
+  { to: "/admin/advertisements", icon: Sparkles, label: "Advertisements" },
   { to: "/admin/analytics", icon: BarChart3, label: "Analytics" },
   { to: "/admin/activity", icon: Activity, label: "Activity Logs" },
 ];
