@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Megaphone, Trash2, Loader2 } from "lucide-react";
+import { Megaphone, Trash2, Loader2, Globe, Building2, GraduationCap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -21,6 +21,8 @@ interface Announcement {
   type: string;
   is_active: boolean;
   created_at: string;
+  target_college: string | null;
+  target_department: string | null;
 }
 
 const AdminAnnouncements = () => {
@@ -32,6 +34,8 @@ const AdminAnnouncements = () => {
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [type, setType] = useState("info");
+  const [targetCollege, setTargetCollege] = useState("");
+  const [targetDepartment, setTargetDepartment] = useState("");
 
   const fetchItems = async () => {
     setLoading(true);
@@ -50,8 +54,15 @@ const AdminAnnouncements = () => {
     if (!title.trim() || !message.trim()) return;
     setSubmitting(true);
     try {
-      await adminRequest("createAnnouncement", { title, message, type });
+      await adminRequest("createAnnouncement", {
+        title,
+        message,
+        type,
+        target_college: targetCollege.trim() || null,
+        target_department: targetDepartment.trim() || null,
+      });
       setTitle(""); setMessage(""); setType("info");
+      setTargetCollege(""); setTargetDepartment("");
       toast({ title: "Announcement published 📢" });
       fetchItems();
     } catch {
@@ -77,7 +88,7 @@ const AdminAnnouncements = () => {
         <h1 className="font-heading text-2xl font-bold flex items-center gap-2">
           <Megaphone className="h-5 w-5 text-primary" /> Announcements
         </h1>
-        <p className="text-sm text-muted-foreground">Broadcast messages to all platform users.</p>
+        <p className="text-sm text-muted-foreground">Broadcast messages globally or target a specific college/department.</p>
       </div>
 
       <Card>
@@ -85,6 +96,23 @@ const AdminAnnouncements = () => {
         <CardContent className="space-y-3">
           <Input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
           <Textarea placeholder="Message" value={message} onChange={(e) => setMessage(e.target.value)} rows={3} />
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <Building2 className="h-3 w-3" /> Target college (optional)
+              </label>
+              <Input placeholder="e.g. MIT Chennai" value={targetCollege} onChange={(e) => setTargetCollege(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <GraduationCap className="h-3 w-3" /> Target department (optional)
+              </label>
+              <Input placeholder="e.g. Computer Science" value={targetDepartment} onChange={(e) => setTargetDepartment(e.target.value)} />
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+            <Globe className="h-3 w-3" /> Leave both empty to send to everyone. Matching is case-insensitive against user profile fields.
+          </p>
           <div className="flex flex-wrap items-center gap-3">
             <Select value={type} onValueChange={setType}>
               <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
@@ -108,41 +136,56 @@ const AdminAnnouncements = () => {
         ) : items.length === 0 ? (
           <p className="text-sm text-muted-foreground py-6 text-center">No announcements yet.</p>
         ) : (
-          items.map((a) => (
-            <Card key={a.id}>
-              <CardContent className="p-4 flex items-start gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="font-semibold text-sm">{a.title}</span>
-                    <Badge variant="outline" className="text-[10px] capitalize">{a.type}</Badge>
-                    {!a.is_active && <Badge variant="secondary" className="text-[10px]">Inactive</Badge>}
+          items.map((a) => {
+            const isGlobal = !a.target_college && !a.target_department;
+            return (
+              <Card key={a.id}>
+                <CardContent className="p-4 flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="font-semibold text-sm">{a.title}</span>
+                      <Badge variant="outline" className="text-[10px] capitalize">{a.type}</Badge>
+                      {!a.is_active && <Badge variant="secondary" className="text-[10px]">Inactive</Badge>}
+                      {isGlobal ? (
+                        <Badge variant="outline" className="text-[10px] gap-1"><Globe className="h-3 w-3" /> Everyone</Badge>
+                      ) : (
+                        <>
+                          {a.target_college && (
+                            <Badge variant="outline" className="text-[10px] gap-1"><Building2 className="h-3 w-3" /> {a.target_college}</Badge>
+                          )}
+                          {a.target_department && (
+                            <Badge variant="outline" className="text-[10px] gap-1"><GraduationCap className="h-3 w-3" /> {a.target_department}</Badge>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">{a.message}</p>
+                    <p className="text-[11px] text-muted-foreground/70 mt-1">{new Date(a.created_at).toLocaleString()}</p>
                   </div>
-                  <p className="text-sm text-muted-foreground">{a.message}</p>
-                  <p className="text-[11px] text-muted-foreground/70 mt-1">{new Date(a.created_at).toLocaleString()}</p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Switch checked={a.is_active} onCheckedChange={(v) => handleToggle(a.id, v)} />
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete announcement?</AlertDialogTitle>
-                        <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDelete(a.id)}>Delete</AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              </CardContent>
-            </Card>
-          ))
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Switch checked={a.is_active} onCheckedChange={(v) => handleToggle(a.id, v)} />
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete announcement?</AlertDialogTitle>
+                          <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDelete(a.id)}>Delete</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })
         )}
       </div>
     </div>
