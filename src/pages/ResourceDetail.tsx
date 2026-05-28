@@ -218,42 +218,57 @@ const ResourceDetail = () => {
               <div className="space-y-2">
                 <p className="text-sm font-semibold">📎 Attached Files</p>
                 {resource.files.map((filePath, i) => {
-                  const fileName = filePath.split("/").pop() || `File ${i + 1}`;
+                  const fileName = (filePath.split("?")[0].split("/").pop() || `file-${i + 1}`).trim() || `file-${i + 1}`;
                   const isFullUrl = filePath.startsWith("http");
-                  const triggerDownload = async (url: string, name: string) => {
-                    try {
-                      const res = await fetch(url);
-                      if (!res.ok) throw new Error("Fetch failed");
-                      const blob = await res.blob();
-                      const blobUrl = URL.createObjectURL(blob);
-                      const a = document.createElement("a");
-                      a.href = blobUrl;
-                      a.download = name;
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-                    } catch {
-                      // Fallback: open in new tab
-                      window.open(url, "_blank", "noopener,noreferrer");
-                    }
+
+                  const downloadViaBlob = async (url: string, name: string) => {
+                    const res = await fetch(url, { credentials: "omit" });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const blob = await res.blob();
+                    if (!blob || blob.size === 0) throw new Error("Empty file");
+                    const blobUrl = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = blobUrl;
+                    a.download = name;
+                    a.rel = "noopener";
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
                   };
+
+                  const openFallback = (url: string, name: string) => {
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = name;
+                    a.target = "_blank";
+                    a.rel = "noopener noreferrer";
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                  };
+
                   return (
                     <button key={i}
                       onClick={async () => {
+                        toast({ title: "Preparing download…", description: fileName });
                         try {
-                          if (isFullUrl) {
-                            await triggerDownload(filePath, fileName);
-                          } else {
+                          let signedUrl = filePath;
+                          if (!isFullUrl) {
                             const { data, error } = await supabase
                               .storage
                               .from("resource-files")
-                              .createSignedUrl(filePath, 300, { download: fileName });
+                              .createSignedUrl(filePath, 600, { download: fileName });
                             if (error || !data?.signedUrl) {
-                              toast({ title: "Error", description: "Could not generate download link", variant: "destructive" });
-                              return;
+                              throw new Error(error?.message || "Could not generate download link");
                             }
-                            await triggerDownload(data.signedUrl, fileName);
+                            signedUrl = data.signedUrl;
+                          }
+                          try {
+                            await downloadViaBlob(signedUrl, fileName);
+                          } catch (blobErr) {
+                            console.warn("Blob download failed, falling back:", blobErr);
+                            openFallback(signedUrl, fileName);
                           }
                         } catch (err: any) {
                           toast({ title: "Download failed", description: err?.message || "Please try again", variant: "destructive" });

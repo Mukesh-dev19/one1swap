@@ -31,7 +31,9 @@ import AdminContent from "./pages/admin/AdminContent";
 import AdminAnalytics from "./pages/admin/AdminAnalytics";
 import AdminActivityLogs from "./pages/admin/AdminActivityLogs";
 import AdminAnnouncements from "./pages/admin/AdminAnnouncements";
+import AdminAdvertisements from "./pages/admin/AdminAdvertisements";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
+import AdvertisementBanner from "@/components/AdvertisementBanner";
 
 const queryClient = new QueryClient();
 
@@ -42,6 +44,7 @@ const AppLayout = () => {
     <>
       <ScrollToTop />
       <Navbar />
+      <AdvertisementBanner />
       <AnnouncementBanner />
       <Routes>
         <Route path="/" element={<Index />} />
@@ -78,6 +81,7 @@ const App = () => (
                 <Route path="users" element={<AdminUsers />} />
                 <Route path="content" element={<AdminContent />} />
                 <Route path="announcements" element={<AdminAnnouncements />} />
+                <Route path="advertisements" element={<AdminAdvertisements />} />
                 <Route path="analytics" element={<AdminAnalytics />} />
                 <Route path="activity" element={<AdminActivityLogs />} />
               </Route>
