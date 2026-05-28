@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Megaphone, X, AlertTriangle, CheckCircle2, Info } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { X, AlertTriangle, CheckCircle2, Info } from "lucide-react";
 
 interface Announcement {
   id: string;
   title: string;
   message: string;
   type: string;
+  target_college: string | null;
+  target_department: string | null;
 }
 
 const TYPE_STYLES: Record<string, { bg: string; icon: any }> = {
@@ -15,8 +18,12 @@ const TYPE_STYLES: Record<string, { bg: string; icon: any }> = {
   success: { bg: "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400", icon: CheckCircle2 },
 };
 
+const norm = (s: string | null | undefined) => (s || "").trim().toLowerCase();
+
 const AnnouncementBanner = () => {
+  const { user } = useAuth();
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [profile, setProfile] = useState<{ college: string | null; department: string | null } | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(() => {
     try {
       return new Set(JSON.parse(localStorage.getItem("dismissedAnnouncements") || "[]"));
@@ -26,10 +33,19 @@ const AnnouncementBanner = () => {
   });
 
   useEffect(() => {
+    const loadProfile = async () => {
+      if (!user) { setProfile(null); return; }
+      const { data } = await supabase.from("profiles").select("college, department").eq("user_id", user.id).maybeSingle();
+      setProfile(data || { college: null, department: null });
+    };
+    loadProfile();
+  }, [user?.id]);
+
+  useEffect(() => {
     const fetch = async () => {
       const { data } = await supabase
         .from("announcements")
-        .select("id,title,message,type")
+        .select("id,title,message,type,target_college,target_department")
         .eq("is_active", true)
         .order("created_at", { ascending: false });
       if (data) setAnnouncements(data as Announcement[]);
@@ -49,7 +65,17 @@ const AnnouncementBanner = () => {
     localStorage.setItem("dismissedAnnouncements", JSON.stringify([...next]));
   };
 
-  const visible = announcements.filter((a) => !dismissed.has(a.id));
+  const matchesAudience = (a: Announcement) => {
+    const hasCollege = !!a.target_college;
+    const hasDept = !!a.target_department;
+    if (!hasCollege && !hasDept) return true; // global
+    if (!user) return false; // targeted requires login
+    if (hasCollege && norm(a.target_college) !== norm(profile?.college)) return false;
+    if (hasDept && norm(a.target_department) !== norm(profile?.department)) return false;
+    return true;
+  };
+
+  const visible = announcements.filter((a) => !dismissed.has(a.id) && matchesAudience(a));
   if (visible.length === 0) return null;
 
   return (

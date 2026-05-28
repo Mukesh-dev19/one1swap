@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
       }
 
       case 'createAnnouncement': {
-        const { title, message, type } = params
+        const { title, message, type, target_college, target_department } = params
         if (!title || !message) {
           return new Response(JSON.stringify({ error: 'Missing fields' }), {
             status: 400,
@@ -139,7 +139,14 @@ Deno.serve(async (req) => {
         }
         const { data: created, error } = await supabaseAdmin
           .from('announcements')
-          .insert({ title, message, type: type || 'info', is_active: true })
+          .insert({
+            title,
+            message,
+            type: type || 'info',
+            is_active: true,
+            target_college: target_college?.trim() || null,
+            target_department: target_department?.trim() || null,
+          })
           .select()
           .single()
         if (error) throw error

@@ -220,22 +220,30 @@ const ResourceDetail = () => {
                 {resource.files.map((filePath, i) => {
                   const fileName = filePath.split("/").pop() || `File ${i + 1}`;
                   const isFullUrl = filePath.startsWith("http");
-                  const triggerDownload = (url: string, name: string) => {
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = name;
-                    a.target = "_blank";
-                    a.rel = "noopener noreferrer";
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
+                  const triggerDownload = async (url: string, name: string) => {
+                    try {
+                      const res = await fetch(url);
+                      if (!res.ok) throw new Error("Fetch failed");
+                      const blob = await res.blob();
+                      const blobUrl = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = blobUrl;
+                      a.download = name;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+                    } catch {
+                      // Fallback: open in new tab
+                      window.open(url, "_blank", "noopener,noreferrer");
+                    }
                   };
                   return (
                     <button key={i}
                       onClick={async () => {
                         try {
                           if (isFullUrl) {
-                            triggerDownload(filePath, fileName);
+                            await triggerDownload(filePath, fileName);
                           } else {
                             const { data, error } = await supabase
                               .storage
@@ -245,7 +253,7 @@ const ResourceDetail = () => {
                               toast({ title: "Error", description: "Could not generate download link", variant: "destructive" });
                               return;
                             }
-                            triggerDownload(data.signedUrl, fileName);
+                            await triggerDownload(data.signedUrl, fileName);
                           }
                         } catch (err: any) {
                           toast({ title: "Download failed", description: err?.message || "Please try again", variant: "destructive" });
