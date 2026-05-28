@@ -20,6 +20,8 @@ export type Database = {
           id: string
           is_active: boolean
           message: string
+          target_college: string | null
+          target_department: string | null
           title: string
           type: string
           updated_at: string
@@ -29,6 +31,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           message: string
+          target_college?: string | null
+          target_department?: string | null
           title: string
           type?: string
           updated_at?: string
@@ -38,6 +42,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           message?: string
+          target_college?: string | null
+          target_department?: string | null
           title?: string
           type?: string
           updated_at?: string
