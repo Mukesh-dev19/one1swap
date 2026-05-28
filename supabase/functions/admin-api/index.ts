@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const ADMIN_USERNAME = 'admin'
-const ADMIN_PASSCODE = '192008'
+const ADMIN_PASSCODE = '2008'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -39,10 +39,15 @@ Deno.serve(async (req) => {
       case 'getOverview': {
         const { count: totalUsers } = await supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true })
         const { count: activeUsers } = await supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).eq('is_blocked', false)
+        const { count: blockedUsers } = await supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).eq('is_blocked', true)
         const { count: totalResources } = await supabaseAdmin.from('resources').select('*', { count: 'exact', head: true })
-        const { data: recentUsers } = await supabaseAdmin.from('profiles').select('full_name, created_at').order('created_at', { ascending: false }).limit(5)
-        const { data: recentResources } = await supabaseAdmin.from('resources').select('title, created_at').order('created_at', { ascending: false }).limit(5)
-        data = { totalUsers, activeUsers, totalResources, recentUsers, recentResources }
+        const { count: totalMessages } = await supabaseAdmin.from('messages').select('*', { count: 'exact', head: true })
+        const { count: totalGroups } = await supabaseAdmin.from('group_chats').select('*', { count: 'exact', head: true })
+        const { count: totalAds } = await supabaseAdmin.from('advertisements').select('*', { count: 'exact', head: true }).eq('is_active', true)
+        const { count: totalAnnouncements } = await supabaseAdmin.from('announcements').select('*', { count: 'exact', head: true }).eq('is_active', true)
+        const { data: recentUsers } = await supabaseAdmin.from('profiles').select('full_name, created_at, department, college').order('created_at', { ascending: false }).limit(5)
+        const { data: recentResources } = await supabaseAdmin.from('resources').select('title, created_at, category, price').order('created_at', { ascending: false }).limit(5)
+        data = { totalUsers, activeUsers, blockedUsers, totalResources, totalMessages, totalGroups, totalAds, totalAnnouncements, recentUsers, recentResources }
         break
       }
 
@@ -168,6 +173,73 @@ Deno.serve(async (req) => {
         break
       }
 
+      // ===== Advertisements =====
+      case 'getAdvertisements': {
+        const { data: ads } = await supabaseAdmin
+          .from('advertisements')
+          .select('*')
+          .order('created_at', { ascending: false })
+        data = ads || []
+        break
+      }
+
+      case 'createAdvertisement': {
+        const { title, adBody, media_url, media_type, link_url } = params
+        if (!title) {
+          return new Response(JSON.stringify({ error: 'Title required' }), {
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+        const { data: created, error } = await supabaseAdmin
+          .from('advertisements')
+          .insert({
+            title,
+            body: adBody || null,
+            media_url: media_url || null,
+            media_type: media_type || 'text',
+            link_url: link_url || null,
+            is_active: true,
+          })
+          .select()
+          .single()
+        if (error) throw error
+        data = created
+        break
+      }
+
+      case 'toggleAdvertisement': {
+        const { adId, isActive } = params
+        await supabaseAdmin.from('advertisements').update({ is_active: isActive }).eq('id', adId)
+        data = { success: true }
+        break
+      }
+
+      case 'deleteAdvertisement': {
+        const { adId } = params
+        await supabaseAdmin.from('advertisements').delete().eq('id', adId)
+        data = { success: true }
+        break
+      }
+
+      case 'uploadAdMedia': {
+        const { fileBase64, fileName, contentType } = params
+        if (!fileBase64 || !fileName) {
+          return new Response(JSON.stringify({ error: 'Missing file' }), {
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+        const binary = Uint8Array.from(atob(fileBase64), (c) => c.charCodeAt(0))
+        const path = `${Date.now()}-${fileName.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+        const { error: upErr } = await supabaseAdmin.storage.from('ad-media').upload(path, binary, {
+          contentType: contentType || 'application/octet-stream',
+          upsert: false,
+        })
+        if (upErr) throw upErr
+        const { data: pub } = supabaseAdmin.storage.from('ad-media').getPublicUrl(path)
+        data = { url: pub.publicUrl, path }
+        break
+      }
+
       case 'getActivityLogs': {
         const { data: recentUsers } = await supabaseAdmin.from('profiles').select('full_name, created_at').order('created_at', { ascending: false }).limit(30)
         const { data: recentResources } = await supabaseAdmin.from('resources').select('title, created_at').order('created_at', { ascending: false }).limit(30)
@@ -192,7 +264,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
